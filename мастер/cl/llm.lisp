@@ -17,8 +17,8 @@
   (append (when system   `((("role" . "system")    ("content" . ,system))))
           (or messages `((("role" . "user")      ("content" . ,prompt))))))
 
-(defun llm-complete (prompt &key (model *llm-model*) system messages)
-  "Запрос к LLM → строка-ответ. Никогда не бросает."
+(defun %llm-complete-real (prompt &key (model *llm-model*) system messages)
+  "Реальный запрос к LLM → строка-ответ. Никогда не бросает."
   (handler-case
       (let* ((body  (cl-json:encode-json-to-string
                      `(("model" . ,model)
@@ -34,3 +34,10 @@
     (error (e)
       (format *error-output* "[llm] ~A~%" e)
       "[ошибка LLM]")))
+
+(defvar *llm-fn* #'%llm-complete-real
+  "Подменяемая функция для LLM. Тесты могут подставить заглушку.")
+
+(defun llm-complete (prompt &key (model *llm-model*) system messages)
+  "Делегирует в *llm-fn* — позволяет инъекцию для тестов."
+  (funcall *llm-fn* prompt :model model :system system :messages messages))

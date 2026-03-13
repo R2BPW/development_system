@@ -5,7 +5,7 @@
 (defun api-url (method)
   (concatenate 'string *telegram-base* *токен* "/" method))
 
-(defun api-post (method payload)
+(defun %api-post-real (method payload)
   "POST JSON к Telegram API → alist или nil."
   (handler-case
       (let* ((raw  (dexador:post (api-url method)
@@ -18,6 +18,13 @@
     (error ()
       (format *error-output* "[tg] ~A error~%" method)
       nil)))
+
+(defvar *api-post-fn* #'%api-post-real
+  "Подменяемая функция для Telegram API POST. Тесты могут подставить заглушку.")
+
+(defun api-post (method payload)
+  "Делегирует в *api-post-fn* — позволяет инъекцию для тестов."
+  (funcall *api-post-fn* method payload))
 
 (defun get-updates (&key (timeout 30) offset)
   (let ((p (append `((:timeout . ,timeout)) (when offset `((:offset . ,offset))))))
