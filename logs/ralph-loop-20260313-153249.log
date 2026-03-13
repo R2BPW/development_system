@@ -32,3 +32,8 @@
 [loop] Осталось задач: 2
 [ralph] project=/root/.openclaw/workspace/development_system/ executor=openai/gpt-4.1
 [ralph] ════ Loop 1 ════ task=[START]
+[ralph] ✓ [START] done
+[loop] ralph-cl вышел, перезапуск через 2с...
+[loop] Осталось задач: 1
+[ralph] project=/root/.openclaw/workspace/development_system/ executor=openai/gpt-4.1
+[ralph] ════ Loop 1 ════ task=[TESTS]
