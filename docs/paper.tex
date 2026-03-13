@@ -1,0 +1,1243 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{geometry}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{mdframed}
+
+% Поля — для комфортного чтения на экране 13"
+\geometry{
+  a4paper,
+  left=2.8cm,
+  right=2.8cm,
+  top=3cm,
+  bottom=3cm
+}
+
+% Гиперссылки
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=green!50!black,
+  urlcolor=blue!70!black,
+  pdftitle={Двухуровневая система порождения вычислительных потоков},
+  pdfauthor={development\_system}
+}
+
+% Цветовая схема для листингов
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{codeframe}{RGB}{200,200,200}
+\definecolor{keyword}{RGB}{0,0,180}
+\definecolor{comment}{RGB}{100,120,100}
+\definecolor{string}{RGB}{160,30,30}
+\definecolor{builtin}{RGB}{130,0,130}
+
+% Настройка listings
+\lstdefinelanguage{Racket}{
+  keywords={define, lambda, let, let*, letrec, cond, if, begin, and, or, not,
+            when, unless, match, for, for/list, for/or, for/fold, map, filter,
+            require, provide, module+, parameterize, with-handlers, values,
+            string=?, string-prefix?, string-append, string-trim, string-join,
+            hash, hash-ref, hash-has-key?, hash-set!, hash-remove!, make-hash,
+            list, cons, car, cdr, first, second, third, fourth, fifth, null?,
+            format, display, displayln, fprintf, newline, number->string,
+            string->number, path->string, build-path, file-exists?, directory-exists?},
+  morestring=[b]",
+  morecomment=[l]{;;;},
+  morecomment=[l]{;;},
+  morecomment=[l]{;},
+  sensitive=true
+}
+
+\lstdefinelanguage{CommonLisp}{
+  keywords={defun, defpackage, defvar, defparameter, in-package, use-package,
+            let, let*, labels, flet, cond, if, when, unless, and, or, not,
+            progn, multiple-value-bind, values, restart-case, handler-bind,
+            error, format, list, cons, car, cdr, first, second, string,
+            string=, string/=, typep, declare, ignore},
+  morestring=[b]",
+  morecomment=[l]{;;;},
+  morecomment=[l]{;;},
+  morecomment=[l]{;},
+  sensitive=nil
+}
+
+\lstset{
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{keyword}\bfseries,
+  commentstyle=\color{comment}\itshape,
+  stringstyle=\color{string},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=8pt,
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=2,
+  showstringspaces=false,
+  captionpos=b,
+  xleftmargin=1em,
+  xrightmargin=0.5em
+}
+
+% Красивые заголовки секций
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.7em}{}[\vspace{-0.3em}\rule{\linewidth}{0.4pt}]
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+
+% Колонтитулы
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{development\_system}}
+\fancyhead[R]{\small\textit{Двухуровневая система порождения вычислительных потоков}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.7em}
+
+% Окружение для ключевых понятий
+\newmdenv[
+  linewidth=0.5pt,
+  linecolor=blue!40,
+  backgroundcolor=blue!4,
+  leftmargin=0,
+  rightmargin=0,
+  innerleftmargin=10pt,
+  innerrightmargin=10pt,
+  innertopmargin=8pt,
+  innerbottommargin=8pt
+]{conceptbox}
+
+\begin{document}
+
+% ============================================================
+\begin{titlepage}
+\vspace*{3cm}
+\begin{center}
+  {\LARGE\bfseries Двухуровневая система порождения\\[0.4em]
+  и исполнения вычислительных потоков}\\[2em]
+  {\large Архитектура, реализация и ключевые инженерные решения}\\[3em]
+  {\normalsize\itshape
+    Технический отчёт\\[0.5em]
+    Март 2026}\\[4em]
+  \begin{abstract}
+    \normalsize
+    В настоящей работе описана двухуровневая система \texttt{development\_system},
+    предназначенная для интерактивного порождения и исполнения вычислительных потоков
+    на основе больших языковых моделей. Система реализована в виде двух взаимодействующих
+    Telegram-ботов: оркестратора~(\emph{Мастер}) на языке Racket и исполнителя
+    (\emph{Подмастерье}), сочетающего Racket с Common~Lisp. Ключевой элемент системы —
+    конвейер порождения: Мастер принимает от пользователя описание задачи на естественном
+    языке, формирует структурированное задание, вызывает внешний агент Claude~Code,
+    получает синтаксически корректный Common~Lisp, компилирует его средствами SBCL и
+    сохраняет как именованный \emph{поток}. Подмастерье загружает активный поток и
+    исполняет его для каждого пользовательского запроса. Описаны архитектура, протоколы
+    взаимодействия компонентов, система условий и перезапуска в Common~Lisp,
+    а также механизмы комбинирования потоков.
+  \end{abstract}
+\end{center}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Введение}
+
+Взаимодействие человека с вычислительной машиной через язык естественных запросов
+остаётся нерешённой инженерной задачей. Существующие подходы, как правило, сводятся
+к одному из двух полюсов: либо к \emph{чёрному ящику} — диалоговой системе, не
+способной к программной автоматизации, либо к \emph{явному программированию} —
+требующему от пользователя глубокого знания API. \texttt{development\_system}
+предлагает иной подход: \textbf{порождение кода на основе диалога} с немедленной
+верификацией и исполнением результата.
+
+Центральное понятие системы — \emph{вычислительный поток}: самодостаточная программа
+на Common~Lisp, принимающая задачу в виде строки и возвращающая строковый ответ.
+Потоки порождаются по описанию на естественном языке, проверяются компилятором и
+выполняются в изолированном процессе SBCL. Такой подход позволяет:
+
+\begin{itemize}[noitemsep]
+  \item сохранять и повторно использовать задокументированную логику;
+  \item комбинировать потоки последовательно, параллельно или условно;
+  \item отделять роль «архитектора» (Мастер) от роли «исполнителя» (Подмастерье).
+\end{itemize}
+
+Система написана в духе SICP~\cite{sicp}: минимализм, рекурсия вместо итерации,
+маленькие чистые функции, паттерн-матчинг. Имена прикладных понятий — на русском языке.
+
+\subsection{Участники системы}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lllp{6cm}}
+\toprule
+\textbf{Компонент} & \textbf{Язык} & \textbf{Роль} \\
+\midrule
+Мастер & Racket & Оркестратор: диалог, порождение потоков, управление \\
+Подмастерье & Racket + SBCL & Исполнитель: приём задачи, запуск потока, ответ \\
+Поток & Common Lisp & Вычислительная единица с точкой входа \texttt{выполнить} \\
+Claude Code & Go (внешний) & Агент порождения кода, вызывается как подпроцесс \\
+\bottomrule
+\end{tabular}
+\caption{Компоненты системы}
+\end{table}
+
+% ============================================================
+\section{Архитектура системы}
+
+\subsection{Обзор взаимодействия}
+
+Система работает следующим образом. Мастер принимает сообщение пользователя через
+Telegram Bot~API и классифицирует его: системная команда, кнопка меню или свободный
+текст. Для команды \emph{«Породить поток»} запускается конвейер генерации. По
+завершении пользователь активирует созданный поток командой \texttt{/запустить},
+и с этого момента все запросы к Подмастерью исполняются через данный поток.
+
+\begin{figure}[H]
+\centering
+\begin{mdframed}[linecolor=gray!60,backgroundcolor=gray!5]
+\ttfamily\small
+\begin{verbatim}
+Пользователь
+  │
+  ├── [Telegram] ──► Мастер (Racket)
+  │                    │
+  │                    ├── Claude Code (subprocess)
+  │                    │     └── порождает .lisp
+  │                    ├── SBCL (subprocess, compile-file)
+  │                    │     └── верифицирует код
+  │                    └── файловая система ──► активный.scm
+  │
+  └── [Telegram] ──► Подмастерье (Racket)
+                       │
+                       └── SBCL (subprocess, load + выполнить)
+                             └── OpenRouter API
+\end{verbatim}
+\end{mdframed}
+\caption{Схема потоков данных}
+\end{figure}
+
+\subsection{Файловая среда как протокол}
+
+Взаимодействие между Мастером и Подмастерьем осуществляется \emph{исключительно
+через файловую систему}. Никакого IPC, никаких сокетов. Мастер записывает файл
+\texttt{потоки/активный.scm}, Подмастерье его читает при получении каждого запроса.
+
+Формат файла — S-выражение:
+
+\begin{lstlisting}[language=Racket, caption={Файл активного потока \texttt{активный.scm}}]
+(активный
+  (имя    "уточнение")
+  (файл   "/path/to/потоки/уточнение.lisp")
+  (пакет  "поток-уточнение"))
+\end{lstlisting}
+
+Такое решение обеспечивает полную независимость компонентов и тривиальную отладку:
+состояние системы всегда доступно для инспекции как обычный текстовый файл.
+
+% ============================================================
+\section{Конфигурация системы: концепция «Души»}
+
+\subsection{Структура \texttt{душа.scm}}
+
+Поведение Мастера определяется конфигурационным файлом, хранящимся в виде
+S-выражения~— \emph{«Души»}. Файл содержит системное указание (system prompt),
+предпочтения модели, долговременную память о пользователе и стилевые директивы:
+
+\begin{lstlisting}[language=Racket, caption={Конфигурация системы \texttt{душа.scm}}]
+(душа
+  (указание  "Ты помощник для создания вычислительных потоков
+              на Common Lisp.")
+  (модель    "claude-sonnet-4-20250514")
+  (теплота   0.3)
+  (память    ((предпочитает . "рекурсию а не циклы")))
+  (девиз     "краткость, однострочники, без англицизмов, SICP"))
+\end{lstlisting}
+
+\subsection{Операции над душой: \texttt{dusha.rkt}}
+
+Модуль \texttt{dusha.rkt} реализует типичный функциональный CRUD для
+неизменяемых S-выражений. Доступ к полям через паттерн-матчинг:
+
+\begin{lstlisting}[language=Racket, caption={Извлечение поля из S-выражения (dusha.rkt)}]
+(define (получить-поле душа имя)
+  (match душа
+    [(list 'душа поля ...)
+     (for/or ([поле (in-list поля)])
+       (match поле
+         [(list (== имя) значение) значение]
+         [_ #f]))]
+    [_ #f]))
+\end{lstlisting}
+
+Обновление поля реализовано как структурное преобразование без мутации:
+
+\begin{lstlisting}[language=Racket, caption={Функциональное обновление поля души}]
+(define (заменить-поле душа имя значение)
+  (match душа
+    [(list 'душа поля ...)
+     (cons 'душа
+           (for/list ([поле (in-list поля)])
+             (match поле
+               [(list (== имя) _) (list имя значение)]
+               [другое другое])))]))
+\end{lstlisting}
+
+Паттерн \texttt{(== имя)} обеспечивает структурное равенство при матчинге символа.
+
+% ============================================================
+\section{Модуль интеграции с языковой моделью: \texttt{llm.rkt}}
+
+Для диалогового режима (свободный текст пользователя) Мастер обращается к
+языковой модели через OpenRouter~API. Модуль \texttt{llm.rkt} инкапсулирует
+этот вызов в одну функцию:
+
+\begin{lstlisting}[language=Racket, caption={Ядро интеграции с LLM (llm.rkt)}]
+(define (спросить-модель указание модель теплота сообщения)
+  (let* ((м    (нормализовать-модель модель))
+         (тело (jsexpr->bytes
+                (hash 'model м
+                      'temperature теплота
+                      'messages
+                      (cons (hash 'role "system" 'content указание)
+                            сообщения))))
+         (заголовки
+          (list (string-append "Authorization: Bearer "
+                               (ключ-openrouter))
+                "Content-Type: application/json"))
+         (порт (post-pure-port (string->url api-url) тело заголовки))
+         (ответ (bytes->jsexpr (port->bytes порт))))
+    (close-input-port порт)
+    (let* ((варианты (hash-ref ответ 'choices #f))
+           (первый   (and варианты
+                          (> (vector-length варианты) 0)
+                          (vector-ref варианты 0)))
+           (сообщ    (and первый (hash-ref первый 'message #f)))
+           (текст    (and сообщ  (hash-ref сообщ  'content #f))))
+      (or текст "Нет ответа от модели."))))
+\end{lstlisting}
+
+Ключевые решения в реализации:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Нормализация модели}: функция \texttt{нормализовать-модель}
+    приводит краткие имена вида \texttt{"claude-sonnet-4"} к полным
+    \texttt{"anthropic/claude-sonnet-4"}, ожидаемым OpenRouter.
+  \item \textbf{JSON в Racket}: библиотека \texttt{racket/json} представляет
+    JSON-массивы как \emph{списки}, а не векторы. Системный промпт
+    добавляется через \texttt{cons}, формируя список сообщений без
+    лишних аллокаций.
+  \item \textbf{Идемпотентность}: функция не хранит состояния и не выполняет
+    побочных эффектов кроме HTTP-запроса.
+\end{enumerate}
+
+% ============================================================
+\section{Конвейер порождения потоков: \texttt{potoki.rkt}}
+
+Это центральный модуль системы, реализующий полный жизненный цикл потока:
+\textbf{описание → задание → код → верификация → хранение}.
+
+\subsection{Вызов Claude Code как подпроцесса}
+
+Для генерации кода используется инструмент Claude Code, запускаемый как
+дочерний процесс через стандартный API подпроцессов Racket:
+
+\begin{lstlisting}[language=Racket, caption={Вызов Claude Code (potoki.rkt)}]
+(define (спросить-клод вопрос)
+  (let ((путь-клод (find-executable-path "claude")))
+    (unless путь-клод
+      (error 'спросить-клод "Программа claude не найдена в PATH"))
+    (let-values ([(процесс выход вход ошибки)
+                  (subprocess #f #f #f
+                              путь-клод "--print" вопрос)])
+      (close-output-port вход)
+      (let ((ответ (port->string выход)))
+        (close-input-port выход)
+        (close-input-port ошибки)
+        (subprocess-wait процесс)
+        (let ((код (subprocess-status процесс)))
+          (if (zero? код) ответ
+              (error 'спросить-клод
+                     "Claude Code завершился с кодом ~a" код)))))))
+\end{lstlisting}
+
+Флаг \texttt{--print} переводит Claude Code в неинтерактивный режим: агент
+получает запрос на stdin, выполняет его и завершается. Это делает вызов
+прозрачным и детерминированным с точки зрения системы.
+
+\subsection{Формирование задания}
+
+Мастер формирует задание для Claude Code, объединяя контекст «Души» с
+пользовательским описанием и явными техническими требованиями:
+
+\begin{lstlisting}[language=Racket, caption={Формирование задания для генератора кода}]
+(define (сформировать-задание душа описание)
+  (let ((указание (or (получить-поле душа 'указание) ""))
+        (девиз    (or (получить-поле душа 'девиз) "")))
+    (string-append
+     "Ты генератор вычислительных потоков на Common Lisp.\n"
+     "Системное указание: " указание "\n"
+     "Девиз: " девиз "\n\n"
+     "Задача: " описание "\n\n"
+     "Требования к коду:\n"
+     "- В начале после defpackage: "
+     "  (ql:quickload '(\"drakma\" \"cl-json\") :silent t)\n"
+     "- HTTP: drakma:http-request; JSON: cl-json\n"
+     "- Getenv: uiop:getenv (OPENROUTER_API_KEY)\n"
+     "- Пакет :поток-<имя>; функция (defun выполнить (задача) ...)\n"
+     "- Рекурсия вместо loop; функции до 15 строк; без CLOS\n"
+     "- Верни ТОЛЬКО код Common Lisp\n")))
+\end{lstlisting}
+
+\subsection{Извлечение кода и определение имени пакета}
+
+Ответ Claude Code может содержать markdown-обёртку (\texttt{```lisp...```}).
+Функция \texttt{извлечь-код} реализует конечный автомат над строками ответа:
+
+\begin{lstlisting}[language=Racket, caption={Извлечение кода из ответа (конечный автомат)}]
+(define (извлечь-код ответ)
+  (let ((строки (string-split ответ "\n")))
+    (let ищи ((ост строки) (внутри #f) (собрано '()))
+      (cond
+        [(null? ост)
+         (if (null? собрано)
+             (string-trim ответ)        ; код без обёртки
+             (string-join (reverse собрано) "\n"))]
+        [(and (not внутри)
+              (let ((с (string-trim (car ост))))
+                (or (string-prefix? с "```lisp")
+                    (string-prefix? с "```common-lisp"))))
+         (ищи (cdr ост) #t собрано)]   ; вошли в блок
+        [(and внутри
+              (string-prefix? (string-trim (car ост)) "```"))
+         (ищи (cdr ост) #f собрано)]   ; вышли из блока
+        [внутри
+         (ищи (cdr ост) #t (cons (car ост) собрано))]
+        [else
+         (ищи (cdr ост) #f собрано)]))))
+\end{lstlisting}
+
+\begin{conceptbox}
+\textbf{Важное замечание о \texttt{string-prefix?} в Racket.}
+Функция принимает аргументы в порядке \texttt{(string-prefix?~строка~префикс)},
+то есть возвращает \texttt{\#t}, если второй аргумент является префиксом первого.
+Это противоположно интуитивному порядку, принятому в большинстве языков, и
+является источником типичной ошибки при портировании кода.
+\end{conceptbox}
+
+Имя пакета извлекается регулярным выражением Perl-совместимого формата (\texttt{\#px}):
+
+\begin{lstlisting}[language=Racket, caption={Извлечение имени пакета}]
+(define (имя-пакета код)
+  (let ((совп (regexp-match #px":поток-([^\\s()]+)" код)))
+    (if совп
+        (string-trim (cadr совп))
+        "безымянный")))
+\end{lstlisting}
+
+Использование \texttt{\#px} (PCRE) вместо \texttt{\#rx} (базовые регулярные выражения)
+принципиально: только PCRE поддерживает мета-символы \texttt{\\s} и \texttt{\\w},
+позволяющие корректно обработать пробельные символы и переносы строк.
+
+\subsection{Верификация через компилятор SBCL}
+
+Перед сохранением код компилируется в SBCL для проверки синтаксической корректности.
+Подпроцесс запускается с предварительной загрузкой Quicklisp и зависимостей:
+
+\begin{lstlisting}[language=Racket, caption={Верификация кода в SBCL (potoki.rkt)}]
+(define (проверить-поток путь)
+  (let* ((путь-sbcl  (find-executable-path "sbcl"))
+         (ql-init    (path->string
+                      (build-path (find-system-path 'home-dir)
+                                  "quicklisp" "setup.lisp")))
+         (загр-ql    (format "(when (probe-file ~s) (load ~s :verbose nil))"
+                             ql-init ql-init))
+         (загр-зав   (string-append
+                      "(when (find-package :ql)"
+                      "  (funcall (intern \"QUICKLOAD\" :ql)"
+                      "   '(\"drakma\" \"cl-json\" \"uiop\")"
+                      "   :silent t))"))
+         (выражение  (format
+                      "(multiple-value-bind (fasl warn fail)"
+                      "    (compile-file ~s)"
+                      "  (if fail (sb-ext:exit :code 1)"
+                      "           (sb-ext:exit :code 0)))"
+                      (path->string путь))))
+    (let-values ([(проц выход вход ошибки)
+                  (subprocess #f #f #f путь-sbcl
+                              "--noinform" "--non-interactive"
+                              "--eval" загр-ql
+                              "--eval" загр-зав
+                              "--eval" выражение)])
+      (close-output-port вход)
+      (let ((вывод (port->string выход))
+            (ош    (port->string ошибки)))
+        (close-input-port выход)
+        (close-input-port ошибки)
+        (subprocess-wait проц)
+        (values (zero? (subprocess-status проц))
+                (string-append вывод ош))))))
+\end{lstlisting}
+
+Функция \texttt{compile-file} возвращает три значения: путь к \texttt{.fasl}-файлу,
+флаг предупреждений и флаг ошибок. Именно третье значение (\texttt{fail}) определяет
+результат верификации. Код завершения подпроцесса транслируется обратно в булевое
+значение.
+
+% ============================================================
+\section{Оркестратор: \texttt{мастер/main.rkt}}
+
+\subsection{Reply-клавиатура}
+
+Пользовательский интерфейс реализован через Telegram Reply~Keyboard — постоянную
+клавиатуру, отображаемую в нижней части экрана мессенджера. Клавиша генерирует
+текстовое сообщение, которое обрабатывается в обычном диспетчере:
+
+\begin{lstlisting}[language=Racket, caption={Reply-клавиатура (main.rkt)}]
+(define (кнопка-reply текст)
+  (hash 'text текст))
+
+(define (главное-меню-reply)
+  (list
+   (list (кнопка-reply "🔧 Породить поток")
+         (кнопка-reply "📋 Мои потоки"))
+   (list (кнопка-reply "ℹ️ Состояние")
+         (кнопка-reply "⏹ Остановить"))
+   (list (кнопка-reply "🧠 Душа")
+         (кнопка-reply "💾 Память"))
+   (list (кнопка-reply "🕐 Время"))))
+
+(define (послать-с-кнопками ид-чата текст)
+  (послать-запрос "sendMessage"
+    (jsexpr->string
+      (hash 'chat_id      ид-чата
+            'text         текст
+            'reply_markup
+            (hash 'keyboard        (главное-меню-reply)
+                  'resize_keyboard #t
+                  'persistent      #t)))))
+\end{lstlisting}
+
+Флаг \texttt{persistent} обеспечивает постоянное присутствие клавиатуры даже
+после перезапуска клиента.
+
+\subsection{Диспетчер сообщений}
+
+Диспетчер сопоставляет входящий текст с командами, включая русскоязычные кнопки меню:
+
+\begin{lstlisting}[language=Racket, caption={Диспетчер команд}]
+(define (сформировать-ответ текст)
+  (cond
+    [(or (string=? текст "/start")
+         (string=? текст "/меню"))         #f]  ; показать меню
+    [(or (string=? текст "🕐 Время")
+         (string=? текст "/время"))        (формат-время)]
+    [(or (string=? текст "ℹ️ Состояние")
+         (string=? текст "/состояние"))    (обработать-состояние)]
+    [(or (string=? текст "📋 Мои потоки")
+         (string=? текст "/потоки"))       (обработать-потоки)]
+    [(or (string=? текст "⏹ Остановить")
+         (string=? текст "/остановить"))   (обработать-остановить)]
+    [(string-prefix? текст "/породить ")
+     (обработать-породить (substring текст 10))]
+    [else (обработать-диалог текст)]))
+\end{lstlisting}
+
+\subsection{Управление состоянием «ожидания ввода»}
+
+Кнопка «Породить поток» требует последующего ввода описания. Для этого используется
+мутируемая хеш-таблица, отслеживающая чаты, находящиеся в режиме ввода:
+
+\begin{lstlisting}[language=Racket, caption={Двухшаговый ввод через состояние}]
+(define *ожидает-породить* (make-hash))
+
+;; В цикле опроса:
+(cond
+  [(string=? текст "🔧 Породить поток")
+   (hash-set! *ожидает-породить* ид-чата #t)
+   (послать-сообщение ид-чата
+     "Опишите задачу для нового потока:")]
+  [(hash-ref *ожидает-породить* ид-чата #f)
+   (hash-remove! *ожидает-породить* ид-чата)
+   (let ((р (обработать-породить текст)))
+     (послать-с-кнопками ид-чата р))]
+  [else ...])
+\end{lstlisting}
+
+\subsection{Авторизация}
+
+Оба бота ограничены одним администратором. Идентификатор задаётся через переменную
+окружения \texttt{ADMIN\_CHAT\_ID}:
+
+\begin{lstlisting}[language=Racket, caption={Проверка авторизации}]
+(define (ид-админа)
+  (let ((s (getenv "ADMIN_CHAT_ID")))
+    (and s (string->number s))))
+
+(define (админ? ид-чата)
+  (let ((а (ид-админа)))
+    (or (not а) (= ид-чата а))))
+
+;; В цикле опроса: игнорируем чужих молча
+(when (and (админ? ид-чата) (eq? тип 'message))
+  ... ; обработка)
+\end{lstlisting}
+
+Если переменная не задана, авторизация отключена (\texttt{(not а)} = \texttt{\#t}).
+Это позволяет запустить систему без конфигурации в режиме разработки.
+
+% ============================================================
+\section{Исполнитель: \texttt{подмастерье/исполнитель.lisp}}
+
+Common Lisp исполнитель реализует загрузку потока, его верификацию,
+выполнение задачи и обработку условий. Это единственный компонент системы
+на Common Lisp (не считая самих потоков).
+
+\subsection{Инициализация Quicklisp}
+
+Поскольку SBCL запускается как чистый процесс без пользовательской инициализации,
+необходима явная загрузка Quicklisp перед выполнением потока:
+
+\begin{lstlisting}[language=CommonLisp, caption={Инициализация Quicklisp в исполнителе}]
+(defun обеспечить-quicklisp ()
+  "Загружает Quicklisp если ещё не загружен."
+  (unless (find-package :ql)
+    (let ((ql-init (merge-pathnames "quicklisp/setup.lisp"
+                                    (user-homedir-pathname))))
+      (when (probe-file ql-init)
+        (load ql-init :verbose nil :print nil))))
+  (when (find-package :ql)
+    (funcall (intern "QUICKLOAD" :ql)
+             '("drakma" "cl-json" "flexi-streams" "uiop")
+             :silent t)))
+\end{lstlisting}
+
+Использование \texttt{intern} вместо прямого символа \texttt{ql:quickload} обязательно:
+пакет \texttt{:ql} ещё не существует в момент компиляции файла.
+
+\subsection{Загрузка потока}
+
+\begin{lstlisting}[language=CommonLisp, caption={Загрузка потока с обработкой условий}]
+(defun загрузить-поток (путь)
+  "Загружает файл потока в текущий образ."
+  (restart-case
+      (progn
+        (unless (probe-file путь)
+          (error "Файл потока не найден: ~a" путь))
+        (обеспечить-quicklisp)
+        (load путь :verbose nil :print nil)
+        t)
+    (пропустить ()
+      :report "Пропустить загрузку потока"
+      nil)))
+\end{lstlisting}
+
+\subsection{Поиск точки входа}
+
+Потоки могут иметь произвольные имена пакетов, поэтому точка входа ищется
+по соглашению об именовании — функция \texttt{ВЫПОЛНИТЬ} в заданном пакете:
+
+\begin{lstlisting}[language=CommonLisp, caption={Динамический поиск точки входа}]
+(defun найти-точку-входа (имя-пакета)
+  "Ищет функцию ВЫПОЛНИТЬ в указанном пакете."
+  (let ((пакет (find-package (string-upcase имя-пакета))))
+    (when пакет
+      (let ((символ (find-symbol "ВЫПОЛНИТЬ" пакет)))
+        (when (and символ (fboundp символ))
+          (symbol-function символ))))))
+\end{lstlisting}
+
+\texttt{string-upcase} необходим: в Common Lisp символы хранятся в верхнем регистре,
+а имена пакетов в метафайлах написаны строчными буквами.
+
+% ============================================================
+\section{Анатомия вычислительного потока}
+
+Потоки генерируются по единому шаблону и имеют предсказуемую структуру.
+Рассмотрим два реальных потока, порождённых системой.
+
+\subsection{Поток «уточнение»: итеративное решение задач}
+
+Поток реализует паттерн \emph{iterative refinement}: каждый шаг улучшает ответ
+предыдущего, останавливаясь при достижении критерия качества или по исчерпании
+лимита итераций.
+
+\begin{lstlisting}[language=CommonLisp, caption={Поток уточнения: ядро алгоритма}]
+(defun уточнить (задача предыдущий шаг)
+  "Рекурсивно уточняет ответ. Шаг от 1 до 5."
+  (if (> шаг 5)
+      предыдущий
+      (let* ((подсказка
+               (if (string= предыдущий "")
+                   (format nil "Задача: ~a" задача)
+                   (format nil
+                     "Задача: ~a~%Предыдущий ответ:~%~a~%~%Уточни."
+                     задача предыдущий)))
+             (история (list (наставление)
+                            (сообщение "user" подсказка)))
+             (ответ (послать-запрос история)))
+        (if (достаточно-ли ответ)
+            ответ
+            (уточнить задача ответ (1+ шаг))))))
+\end{lstlisting}
+
+Критерий остановки:
+
+\begin{lstlisting}[language=CommonLisp, caption={Критерий качества ответа}]
+(defun достаточно-ли (ответ)
+  "Проверяет признаки завершённости в тексте."
+  (and (> (length ответ) 20)
+       (or (search "ГОТОВО" ответ)
+           (search "Итог:" ответ)
+           (search "Ответ:" ответ))))
+\end{lstlisting}
+
+Точка входа оборачивает рекурсию в \texttt{restart-case}:
+
+\begin{lstlisting}[language=CommonLisp, caption={Точка входа потока уточнения}]
+(defun выполнить (задача)
+  "Итеративно решает задачу за 1–5 шагов."
+  (restart-case
+      (уточнить задача "" 1)
+    (вернуть-ошибку (e)
+      :report "Вернуть описание ошибки"
+      (format nil "Ошибка: ~a" e))))
+\end{lstlisting}
+
+\subsection{Поток «исполнитель»: порождение и выполнение кода}
+
+Поток реализует полный цикл: получить задачу → попросить модель написать Python-код
+→ очистить его от markdown-обёртки → запустить через \texttt{uiop:run-program}.
+
+\begin{lstlisting}[language=CommonLisp, caption={Исполнение Python-кода через uiop}]
+(defun исполнить-python (код)
+  (restart-case
+      (multiple-value-bind (вывод код-ошибки статус)
+          (uiop:run-program
+           (list "python3" "-c" код)
+           :output        :string
+           :error-output  :string
+           :ignore-error-status t)
+        (declare (ignore статус))
+        (if (and код-ошибки (string/= код-ошибки ""))
+            (values nil код-ошибки)
+            (values вывод nil)))
+    (вернуть-ошибку (e)
+      (values nil (format nil "Ошибка: ~A" e)))))
+\end{lstlisting}
+
+Очистка кода от markdown удаляет строки, начинающиеся с \texttt{```}:
+
+\begin{lstlisting}[language=CommonLisp, caption={Рекурсивная очистка markdown-обёртки}]
+(defun убрать-обёртку (строки)
+  (cond ((null строки) nil)
+        ((начинается-с "```" (car строки))
+         (убрать-обёртку (cdr строки)))
+        (t (cons (car строки)
+                 (убрать-обёртку (cdr строки))))))
+
+(defun начинается-с (префикс строка)
+  (and (>= (length строка) (length префикс))
+       (string= префикс строка :end2 (length префикс))))
+\end{lstlisting}
+
+Точка входа объединяет все шаги:
+
+\begin{lstlisting}[language=CommonLisp, caption={Точка входа потока исполнителя}]
+(defun выполнить (задача)
+  (restart-case
+      (let* ((код-python (запросить-модель задача))
+             (чистый-код (очистить-код код-python)))
+        (multiple-value-bind (результат ошибка)
+            (исполнить-python чистый-код)
+          (or ошибка результат)))
+    (отказ (причина)
+      (format nil "Отказ: ~A" причина))))
+\end{lstlisting}
+
+% ============================================================
+\section{Комбинирование потоков: \texttt{kombinirovanie.rkt}}
+
+Мастер поддерживает три базовые схемы комбинирования потоков и произвольную
+четвёртую, генерируемую по описанию.
+
+\subsection{Последовательная цепочка}
+
+Порождает новый поток-обёртку, последовательно передающий результат:
+
+\begin{lstlisting}[language=Racket, caption={Генерация кода цепочки потоков}]
+(define (шаблон-цепочки имена пакеты файлы)
+  (string-append
+   "(defpackage :поток-" (string-join имена "-") " (:use :cl))\n"
+   "(in-package :поток-" (string-join имена "-") ")\n\n"
+   ;; загрузка всех потоков
+   (apply string-append
+          (map (lambda (ф)
+                 (format "(load ~s :verbose nil :print nil)\n" ф))
+               файлы))
+   "\n(defun выполнить (задача)\n"
+   "  (let цикл ((вх задача)\n"
+   "             (ост (list " (string-join
+                               (map (lambda (п)
+                                      (string-append "'" п ":выполнить"))
+                                    пакеты)
+                               " ") ")))\n"
+   "    (if (null ост) вх\n"
+   "        (цикл (funcall (car ост) вх) (cdr ост)))))\n"))
+\end{lstlisting}
+
+% ============================================================
+\section{Протокол взаимодействия с Telegram Bot API}
+
+\subsection{Long polling}
+
+Оба бота используют long polling: запрос \texttt{getUpdates} с \texttt{timeout=30}
+блокируется на сервере Telegram до появления нового обновления или истечения тайм-аута.
+
+\begin{lstlisting}[language=Racket, caption={Long polling в Racket}]
+(define (получить-обновления сдвиг)
+  (let* ((адрес (string->url
+                 (string-append (адрес-api "getUpdates")
+                                "?timeout=30&offset="
+                                (number->string сдвиг))))
+         (порт (get-pure-port адрес)))
+    (begin0 (port->string порт)
+            (close-input-port порт))))
+\end{lstlisting}
+
+Параметр \texttt{offset} содержит \texttt{update\_id + 1} последнего обработанного
+обновления, что исключает повторную обработку.
+
+\subsection{Разбор обновлений}
+
+Парсер обрабатывает два типа событий: обычные сообщения и ответы на callback-кнопки.
+Результат унифицирован в единый формат события:
+
+\begin{lstlisting}[language=Racket, caption={Парсер обновлений: унификация событий}]
+(define (извлечь-события обновления)
+  (filter-map
+   (lambda (обн)
+     (cond
+       [(hash-has-key? обн 'message)
+        (let* ((сообщ   (hash-ref обн 'message))
+               (ид-обн  (hash-ref обн 'update_id 0))
+               (чат     (hash-ref сообщ 'chat (hash)))
+               (ид-чата (hash-ref чат 'id 0))
+               (текст   (hash-ref сообщ 'text "")))
+          (list ид-обн ид-чата 'message текст))]
+       [(hash-has-key? обн 'callback_query)
+        (let* ((cb      (hash-ref обн 'callback_query))
+               (ид-обн  (hash-ref обн 'update_id 0))
+               (чат     (hash-ref
+                          (hash-ref cb 'message (hash))
+                          'chat (hash)))
+               (ид-чата (hash-ref чат 'id 0))
+               (cb-id   (hash-ref cb 'id ""))
+               (данные  (hash-ref cb 'data "")))
+          (list ид-обн ид-чата 'callback cb-id данные))]
+       [else #f]))
+   обновления))
+\end{lstlisting}
+
+% ============================================================
+\section{Инженерные уроки и ключевые ошибки}
+
+В процессе разработки были выявлены несколько нетривиальных особенностей
+применяемых инструментов:
+
+\subsection{Порядок аргументов \texttt{string-prefix?} в Racket}
+
+\begin{conceptbox}
+Функция \texttt{(string-prefix? s1 s2)} в \texttt{racket/string}
+возвращает \texttt{\#t} если \emph{s2} является префиксом \emph{s1}.
+Иными словами, первый аргумент — строка, второй — искомый префикс.
+Это противоположно семантике аналогичных функций в Python, Haskell и Go.
+\end{conceptbox}
+
+Проверка: \texttt{(string-prefix? "/породить тест" "/породить ")} → \texttt{\#t}.
+
+\subsection{JSON-массивы в Racket: списки, не векторы}
+
+Библиотека \texttt{racket/json} представляет JSON-массивы как списки Racket,
+а не векторы. Передача вектора в \texttt{jsexpr->bytes} вызывает ошибку типа.
+Корректное формирование массива сообщений:
+
+\begin{lstlisting}[language=Racket, caption={Правильное формирование JSON-массива}]
+;; Неправильно (vector):
+'messages (list->vector ...)   ; → ошибка jsexpr->bytes
+
+;; Правильно (list):
+'messages (cons (hash 'role "system" 'content указание)
+                сообщения)
+\end{lstlisting}
+
+\subsection{Регулярные выражения: \texttt{\#rx} vs \texttt{\#px}}
+
+В Racket существуют два типа регулярных выражений:
+\texttt{\#rx} (POSIX-совместимые) не обрабатывают \texttt{\\s}, \texttt{\\w} и
+аналогичные мета-символы. Для работы с ними необходим \texttt{\#px} (PCRE):
+
+\begin{lstlisting}[language=Racket]
+;; #rx не понимает \s:
+(regexp-match #rx":поток-([^\s()]+)" код)   ; ошибка
+
+;; #px работает корректно:
+(regexp-match #px":поток-([^\\s()]+)" код)  ; OK
+\end{lstlisting}
+
+\subsection{Динамическая загрузка Quicklisp в Common Lisp}
+
+При вызове \texttt{ql:quickload} в файле, загружаемом до инициализации Quicklisp,
+компилятор сигнализирует об ошибке «Package QL does not exist». Обходное решение —
+\texttt{intern}:
+
+\begin{lstlisting}[language=CommonLisp, caption={Безопасная загрузка через intern}]
+;; Неправильно (ошибка компиляции до загрузки Quicklisp):
+(ql:quickload '("drakma") :silent t)
+
+;; Правильно (откладывает разрешение символа на время выполнения):
+(funcall (intern "QUICKLOAD" :ql) '("drakma") :silent t)
+\end{lstlisting}
+
+% ============================================================
+\section{Переменные окружения и конфигурация}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Переменная} & \textbf{Компонент} & \textbf{Назначение} \\
+\midrule
+\texttt{MASTER\_BOT\_TOKEN}     & Мастер      & Токен Telegram-бота Мастера \\
+\texttt{APPRENTICE\_BOT\_TOKEN} & Подмастерье & Токен Telegram-бота Подмастерья \\
+\texttt{OPENROUTER\_API\_KEY}   & Оба         & Ключ API OpenRouter \\
+\texttt{ADMIN\_CHAT\_ID}        & Оба         & Telegram ID единственного пользователя \\
+\bottomrule
+\end{tabular}
+\caption{Переменные окружения системы}
+\end{table}
+
+% ============================================================
+\section{Метафайлы потоков: формат \texttt{.мета}}
+
+Каждый поток сопровождается файлом метаданных в формате S-выражения.
+Это решение продолжает сквозную тему проекта: состояние системы — всегда
+читаемый текст.
+
+\begin{lstlisting}[language=Racket, caption={Формат файла метаданных потока}]
+(мета
+  (имя         "уточнение")
+  (создан      "2026-03-13T10:17:12")
+  (описание    "Итеративное решение задач через языковую модель")
+  (зависимости ())
+  (входит-в    ())   ; список потоков-агрегаторов
+  (состояние   :готов))  ; :готов | :работает | :ошибка
+\end{lstlisting}
+
+Доступ к полям метафайла через паттерн-матчинг аналогичен работе с «Душой»:
+
+\begin{lstlisting}[language=Racket, caption={Чтение метаданных потока}]
+(define (поле-меты мета имя)
+  (match мета
+    [(list 'мета поля ...)
+     (for/or ([поле (in-list поля)])
+       (match поле
+         [(list (== имя) значение) значение]
+         [_ #f]))]
+    [_ #f]))
+
+;; Пример использования:
+(define (описание-потока имя)
+  (let* ((путь-мета (build-path каталог
+                                (string-append имя ".мета")))
+         (мета      (прочитать-мету путь-мета)))
+    (or (and мета (поле-меты мета 'описание))
+        "без описания")))
+\end{lstlisting}
+
+% ============================================================
+\section{Цикл опроса: обработка ошибок и перезапуск}
+
+\subsection{Устойчивость к сетевым сбоям}
+
+Главный цикл опроса в обоих ботах оборачивает каждую итерацию в
+\texttt{with-handlers}. При любом исключении — сетевом тайм-ауте,
+ошибке парсинга JSON, недоступности API — цикл засыпает на пять секунд
+и продолжает работу с тем же сдвигом:
+
+\begin{lstlisting}[language=Racket, caption={Устойчивый цикл опроса с перезапуском}]
+(define (запустить-опрос)
+  (загрузить-душу)
+  (displayln "Мастер запущен. Ожидаю сообщения...")
+  (let цикл ((сдвиг 0))
+    (with-handlers
+        ([exn:fail?
+          (lambda (e)
+            (displayln
+              (format "Ошибка: ~a" (exn-message e)))
+            (sleep 5)
+            (цикл сдвиг))])   ; повторяем с тем же сдвигом
+      (let* ((ответ    (получить-обновления сдвиг))
+             (события  (извлечь-события
+                          (разобрать-обновления ответ))))
+        (let обр ((ост события) (макс сдвиг))
+          (if (null? ост)
+              (цикл макс)
+              (let* ((событие (car ост))
+                     (ид-обн  (first событие))
+                     ...)
+                ...
+                (обр (cdr ост)
+                     (max макс (+ ид-обн 1))))))))))
+\end{lstlisting}
+
+Ключевой инвариант: \texttt{сдвиг} не обновляется до успешной обработки
+всех сообщений текущего батча. Это гарантирует, что при падении в середине
+батча все сообщения будут обработаны повторно.
+
+\subsection{Защита от чужих пользователей}
+
+Проверка авторизации происходит до любой обработки события, чтобы не
+расходовать ресурсы LLM на нежелательные запросы:
+
+\begin{lstlisting}[language=Racket, caption={Раннее отклонение неавторизованных}]
+(when (and (админ? ид-чата) (eq? тип 'message))
+  ;; только здесь происходит реальная обработка
+  (let ((текст (fourth событие)))
+    ...))
+;; чужие молча игнорируются — никакого ответа
+\end{lstlisting}
+
+% ============================================================
+\section{Запуск потока в Подмастерье: полный путь данных}
+
+Цепочка вызовов при исполнении пользовательского запроса в Подмастерье
+охватывает несколько уровней абстракции: от Telegram до SBCL-подпроцесса.
+
+\begin{lstlisting}[language=Racket, caption={Исполнение потока: Racket-часть Подмастерья}]
+(define (выполнить-в-sbcl путь-потока имя-пакета задача)
+  (let* ((путь-sbcl (find-executable-path "sbcl"))
+         (исп       (->string (путь-исполнителя)))
+         (загрузка
+          (format "(load ~s :verbose nil :print nil)" исп))
+         (вызов
+          (format
+           "(let ((ф (funcall (intern \"ЗАПУСК\" \"ИСПОЛНИТЕЛЬ\")
+                               ~s ~s ~s)))
+              (princ ф) (finish-output)
+              (sb-ext:exit :code 0))"
+           (->string путь-потока) имя-пакета задача)))
+    (let-values ([(проц выход вход ошибки)
+                  (subprocess #f #f #f
+                              путь-sbcl
+                              "--noinform" "--non-interactive"
+                              "--eval" загрузка
+                              "--eval" вызов)])
+      (close-output-port вход)
+      (let ((вывод (port->string выход))
+            (ош    (port->string ошибки)))
+        (close-input-port выход)
+        (close-input-port ошибки)
+        (subprocess-wait проц)
+        (if (zero? (subprocess-status проц))
+            (string-trim вывод)
+            (format "Ошибка SBCL: ~a" (string-trim ош)))))))
+\end{lstlisting}
+
+Функция \texttt{ЗАПУСК} в пакете \texttt{ИСПОЛНИТЕЛЬ} загружает поток,
+находит точку входа и вызывает её:
+
+\begin{lstlisting}[language=CommonLisp, caption={Функция ЗАПУСК в исполнителе (CL)}]
+(defun запуск (путь-потока имя-пакета задача)
+  "Загружает поток, находит точку входа, исполняет."
+  (загрузить-поток путь-потока)
+  (let ((точка-входа (найти-точку-входа имя-пакета)))
+    (unless точка-входа
+      (error "Функция ВЫПОЛНИТЬ не найдена в пакете ~a"
+             имя-пакета))
+    (выполнить-с-повтором точка-входа задача)))
+
+(defun выполнить-с-повтором (функция задача)
+  "Вызывает функцию потока с защитой от условий."
+  (restart-case
+      (funcall функция задача)
+    (вернуть-задачу ()
+      :report "Вернуть исходную задачу при ошибке"
+      задача)))
+\end{lstlisting}
+
+% ============================================================
+\section{Производительность и задержки}
+
+\subsection{Источники задержки}
+
+Время ответа системы складывается из нескольких компонентов:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrp{5.5cm}}
+\toprule
+\textbf{Этап} & \textbf{Типичное время} & \textbf{Примечание} \\
+\midrule
+Получение обновления (long poll) & $<$100 мс & при наличии сообщения \\
+Запуск SBCL подпроцесса           & 1--3 с    & холодный старт \\
+Загрузка Quicklisp + зависимостей & 2--5 с    & drakma, cl-json \\
+Обращение к OpenRouter API        & 1--5 с    & зависит от модели \\
+Итого (исполнение потока)         & 4--13 с   & \\
+\midrule
+Порождение потока (Claude Code)   & 15--60 с  & однократно \\
+\bottomrule
+\end{tabular}
+\caption{Типичные задержки компонентов}
+\end{table}
+
+Наибольший вклад вносит запуск SBCL: каждый запрос к Подмастерью
+создаёт новый процесс. Потенциальное улучшение — постоянный SBCL-образ
+с предзагруженными зависимостями (\texttt{save-lisp-and-die}).
+
+\subsection{Возможности оптимизации}
+
+\begin{enumerate}
+  \item \textbf{Образы SBCL}: сохранение образа с загруженными потоком
+    и зависимостями сокращает холодный старт с 4--8 с до $<$100 мс.
+
+  \item \textbf{Постоянный процесс-исполнитель}: вместо запуска нового
+    SBCL для каждого запроса можно поддерживать долгоживущий процесс
+    с SWANK-сервером для подачи задач.
+
+  \item \textbf{Кеширование зависимостей}: предкомпиляция \texttt{.fasl}
+    файлов устраняет повторную компиляцию \texttt{drakma} при каждом запросе.
+\end{enumerate}
+
+% ============================================================
+\section{Заключение}
+
+В работе описана система \texttt{development\_system}, реализующая концепцию
+\emph{порождаемого кода как конфигурации}. Основные результаты:
+
+\begin{enumerate}
+  \item \textbf{Конвейер генерации}: описание на естественном языке
+    преобразуется в верифицированный Common Lisp код за одно обращение
+    к языковой модели.
+
+  \item \textbf{Двухуровневая архитектура}: разделение ролей оркестратора
+    (Racket, диалог и управление) и исполнителя (SBCL, вычисления) позволяет
+    независимо масштабировать каждую компоненту.
+
+  \item \textbf{Файловая среда как протокол}: отсутствие явного IPC между
+    компонентами упрощает отладку и обеспечивает персистентность состояния.
+
+  \item \textbf{Система условий Common Lisp}: паттерн \texttt{restart-case}
+    обеспечивает структурированную обработку ошибок без исключений.
+
+  \item \textbf{Стиль SICP}: рекурсия, маленькие функции, паттерн-матчинг
+    и идиоматический Racket обеспечивают высокую читаемость при минимальном
+    объёме кода.
+\end{enumerate}
+
+Открытые вопросы: персистентность истории диалога между сессиями,
+параллельное исполнение потоков с разделением результатов, формальная
+верификация потоков средствами ACL2.
+
+% ============================================================
+\section*{Приложение: структура файлов проекта}
+\addcontentsline{toc}{section}{Приложение: структура файлов проекта}
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize, numbers=none,
+                   caption={Полная структура каталогов development\_system}]
+development_system/
+├── мастер/
+│   ├── main.rkt           # Оркестратор: цикл опроса, меню, диспетчер
+│   ├── dusha.rkt          # Конфигурация: чтение/запись S-выражений
+│   ├── potoki.rkt         # Конвейер порождения и проверки потоков
+│   ├── kombinirovanie.rkt # Комбинирование: цепочка, параллель, ветвление
+│   ├── llm.rkt            # Интеграция с OpenRouter API
+│   ├── душа.scm           # Конфигурационный файл системы
+│   ├── история/           # Журналы диалогов (по дням, .txt)
+│   └── потоки/
+│       ├── активный.scm   # Активный поток для Подмастерья
+│       ├── уточнение.lisp # Поток: итеративное уточнение ответа
+│       ├── уточнение.мета # Метаданные потока
+│       ├── исполнитель.lisp # Поток: генерация и выполнение кода
+│       └── исполнитель.мета
+│
+├── подмастерье/
+│   ├── main.rkt           # Бот-исполнитель: цикл опроса, диспетчер
+│   └── исполнитель.lisp   # CL-ядро: загрузка, запуск, condition/restart
+│
+└── docs/
+    ├── plans/
+    │   └── TODO.md        # Исходное техническое задание
+    └── paper.tex          # Настоящий документ
+\end{lstlisting}
+
+Общий объём кода системы (без генерируемых потоков):
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+\textbf{Файл} & \textbf{Строк} & \textbf{Язык} \\
+\midrule
+\texttt{мастер/main.rkt}           & $\sim$330 & Racket \\
+\texttt{мастер/potoki.rkt}         & $\sim$270 & Racket \\
+\texttt{мастер/dusha.rkt}          & $\sim$120 & Racket \\
+\texttt{мастер/kombinirovanie.rkt} & $\sim$160 & Racket \\
+\texttt{мастер/llm.rkt}            & $\sim$40  & Racket \\
+\texttt{подмастерье/main.rkt}      & $\sim$260 & Racket \\
+\texttt{подмастерье/исполнитель.lisp} & $\sim$100 & Common Lisp \\
+\midrule
+\textbf{Итого}                     & $\sim$1280 & \\
+\bottomrule
+\end{tabular}
+\caption{Объём кода системы}
+\end{table}
+
+\begin{thebibliography}{9}
+\bibitem{sicp}
+  Abelson, H., Sussman, G.J.
+  \emph{Structure and Interpretation of Computer Programs}.
+  MIT Press, 1996.
+
+\bibitem{sbcl}
+  SBCL Team.
+  \emph{SBCL User Manual}.
+  \url{https://www.sbcl.org/manual/}
+
+\bibitem{racket}
+  Flatt, M., PLT.
+  \emph{Reference: Racket}.
+  \url{https://docs.racket-lang.org/reference/}
+
+\bibitem{openrouter}
+  OpenRouter.
+  \emph{OpenRouter API Documentation}.
+  \url{https://openrouter.ai/docs}
+
+\bibitem{telegram}
+  Telegram.
+  \emph{Bot API Reference}.
+  \url{https://core.telegram.org/bots/api}
+\end{thebibliography}
+
+\end{document}

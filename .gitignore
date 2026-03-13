@@ -22,3 +22,12 @@ secrets/
 # SBCL-образы (бинарники, могут содержать ключи в памяти)
 мастер/образы/
 *.core
+
+# LaTeX вспомогательные файлы
+docs/*.aux
+docs/*.log
+docs/*.toc
+docs/*.out
+docs/*.synctex.gz
+docs/*.fls
+docs/*.fdb_latexmk
