@@ -5,6 +5,9 @@
 # Racket compiled bytecode
 compiled/
 
+# SBCL скомпилированные файлы
+*.fasl
+
 # Секреты и переменные окружения
 .env
 .env.*
