@@ -41,7 +41,7 @@ OpenRouter key: env `OPENROUTER_API_KEY`. Модель LLM: `openai/gpt-4.1`.
 
 - [x] **[ASDF]** Создать `мастер/cl/мастер.asd` (система `:мастер`, зависимости `dexador` `cl-json`) и `мастер/cl/packages.lisp` (defpackage :мастер с nickname м)
 
-- [ ] **[CONFIG]** Создать `мастер/cl/config.lisp`: defvar для *токен*, *admin-id*, *корень*, *путь-души*, *каталог-потоков*, *каталог-истории* из env переменных
+- [x] **[CONFIG]** Создать `мастер/cl/config.lisp`: defvar для *токен*, *admin-id*, *корень*, *путь-души*, *каталог-потоков*, *каталог-истории* из env переменных
 
 - [ ] **[TELEGRAM]** Создать `мастер/cl/telegram.lisp`: функции `api-url`, `api-call`, `get-updates` (long-poll timeout 30s), `send-message` (text, optional reply-markup), `send-document`, `answer-callback-query`, `make-inline-keyboard`
 
