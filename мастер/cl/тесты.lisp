@@ -144,5 +144,83 @@
         (%dispatch 42 "/потоки")
         (assert (not (null отправлено)))))))
 
+;; ── Фаза 3: юнит-тесты (без IO) ─────────────────────────────────────────────
+
+;; 17. %split-words — пустая строка → nil
+(тест "%split-words пустая → nil"
+  (assert (null (%split-words ""))))
+
+;; 18. %split-words — множественные пробелы
+(тест "%split-words множественные пробелы"
+  (assert (equal (%split-words "a  b") '("a" "b"))))
+
+;; 19. %split-words — пробелы по краям
+(тест "%split-words пробелы по краям"
+  (assert (equal (%split-words "  hello  ") '("hello"))))
+
+;; 20. %split-words — один элемент
+(тест "%split-words один элемент"
+  (assert (equal (%split-words "слово") '("слово"))))
+
+;; 21. %cmd-args — команда с аргументами
+(тест "%cmd-args команда с аргументами"
+  (multiple-value-bind (cmd args) (%cmd-args "/запустить эхо задача")
+    (assert (string= cmd "/запустить"))
+    (assert (equal args '("эхо" "задача")))))
+
+;; 22. %cmd-args — пустая строка
+(тест "%cmd-args пустая строка"
+  (multiple-value-bind (cmd args) (%cmd-args "")
+    (assert (string= cmd ""))
+    (assert (null args))))
+
+;; 23. %cmd-args — только команда без аргументов
+(тест "%cmd-args только команда"
+  (multiple-value-bind (cmd args) (%cmd-args "/потоки")
+    (assert (string= cmd "/потоки"))
+    (assert (null args))))
+
+;; 24. %cmd-args — downcases команду
+(тест "%cmd-args downcases"
+  (multiple-value-bind (cmd args) (%cmd-args "/ПОТОКИ аргумент")
+    (assert (string= cmd "/потоки"))
+    (assert (equal args '("аргумент")))))
+
+;; 25. %кнопка->команда — точный матч кнопок
+(тест "%кнопка->команда Потоки"
+  (assert (string= (%кнопка->команда "Потоки") "/потоки")))
+
+(тест "%кнопка->команда Запустить"
+  (assert (string= (%кнопка->команда "Запустить") "/запустить")))
+
+(тест "%кнопка->команда Породить поток"
+  (assert (string= (%кнопка->команда "Породить поток") "/породить")))
+
+(тест "%кнопка->команда Состояние"
+  (assert (string= (%кнопка->команда "Состояние") "/состояние")))
+
+(тест "%кнопка->команда Диалог"
+  (assert (string= (%кнопка->команда "Диалог") "/диалог")))
+
+(тест "%кнопка->команда Сбросить"
+  (assert (string= (%кнопка->команда "Сбросить") "/сбросить")))
+
+(тест "%кнопка->команда Остановить"
+  (assert (string= (%кнопка->команда "Остановить") "/остановить")))
+
+;; 26. %кнопка->команда — неизвестная кнопка → nil
+(тест "%кнопка->команда неизвестная → nil"
+  (assert (null (%кнопка->команда "Несуществующая"))))
+
+;; 27. %pkg-name — стандартные случаи
+(тест "%pkg-name эхо"
+  (assert (string= (%pkg-name "эхо") "ПОТОК-ЭХО")))
+
+(тест "%pkg-name порождатель"
+  (assert (string= (%pkg-name "порождатель") "ПОТОК-ПОРОЖДАТЕЛЬ")))
+
+(тест "%pkg-name латиница"
+  (assert (string= (%pkg-name "test") "ПОТОК-TEST")))
+
 (format t "~%Итого ошибок: ~A~%" *тест-ошибки*)
 (when (plusp *тест-ошибки*) (sb-ext:exit :code 1))
