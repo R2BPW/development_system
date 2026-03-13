@@ -59,7 +59,3 @@ nohup racket подмастерье/main.rkt >> /tmp/apprentice.log 2>&1 &
   main.rkt            — бот-исполнитель
   исполнитель.lisp    — загрузка потока, вызов SBCL, condition/restart
 ```
-
-## Девиз
-
-> Краткость. Изящные однострочники. Без англицизмов. В духе SICP.
