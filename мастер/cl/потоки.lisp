@@ -6,8 +6,11 @@
   (mapcar #'pathname-name (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
 
 (defun загрузить-поток (путь)
-  (let ((ok (not (null (ignore-errors (load путь :verbose nil :print nil))))))
-    (format t "[поток] ~A ~A~%" (pathname-name путь) (if ok "OK" "FAIL"))
+  (let* ((имя (pathname-name путь))
+         (ok (not (null (ignore-errors (load путь :verbose nil :print nil))))))
+    (format t "[поток] ~A ~A~%" имя (if ok "OK" "FAIL"))
+    (when ok
+      (setf (gethash имя *активные-потоки*) t))
     ok))
 
 (defun загрузить-все-потоки ()

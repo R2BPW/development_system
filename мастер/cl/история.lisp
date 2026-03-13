@@ -1,5 +1,7 @@
 (in-package #:мастер)
 
+(defparameter *макс-история* 20)
+
 (defun %путь-истории (chat-id)
   (merge-pathnames (format nil "~A.json" chat-id) *каталог-истории*))
 
@@ -18,7 +20,10 @@
 
 (defun добавить-сообщение (chat-id role content)
   (let* ((история (or (загрузить-историю chat-id) '()))
-         (новая (append история (list `((:role . ,role) (:content . ,content))))))
+         (полная (append история (list `((:role . ,role) (:content . ,content)))))
+         (новая (if (> (length полная) *макс-история*)
+                    (last полная *макс-история*)
+                    полная)))
     (сохранить-историю chat-id новая)
     новая))
 
