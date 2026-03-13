@@ -1,7 +1,9 @@
 (in-package #:мастер)
 
 (defparameter *токен* (uiop:getenv "MASTER_BOT_TOKEN"))
-(defparameter *admin-id* (uiop:getenv "ADMIN_CHAT_ID"))
+(defparameter *admin-chat-id*
+  (let ((s (uiop:getenv "ADMIN_CHAT_ID")))
+    (when (and s (plusp (length s))) (parse-integer s))))
 
 ;; Корень = мастер/ (родитель мастер/cl/ где лежит .asd)
 (defparameter *корень*
