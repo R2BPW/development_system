@@ -297,9 +297,9 @@
   (загрузить-душу)
   (displayln "Мастер запущен. Ожидаю сообщения...")
   (let цикл ((сдвиг 0))
-    (with-handlers ([exn:fail:network?
+    (with-handlers ([exn:fail?
                      (lambda (e)
-                       (displayln (format "Ошибка сети: ~a" (exn-message e)))
+                       (displayln (format "Ошибка: ~a" (exn-message e)))
                        (sleep 5)
                        (цикл сдвиг))])
       (let* ((ответ (получить-обновления сдвиг))

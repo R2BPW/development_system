@@ -12,6 +12,7 @@
          racket/match
          racket/path
          racket/port
+         racket/runtime-path
          racket/string
          racket/system)
 
@@ -39,13 +40,15 @@
 (define (адрес-api метод)
   (string-append "https://api.telegram.org/bot" (ключ-бота) "/" метод))
 
+(define-runtime-path корень-подмастерье ".")
+
 (define путь-исполнителя
   (make-parameter
-   (build-path (current-directory) "подмастерье" "исполнитель.lisp")))
+   (build-path корень-подмастерье "исполнитель.lisp")))
 
 (define каталог-образов
   (make-parameter
-   (build-path (current-directory) "мастер" "образы")))
+   (build-path корень-подмастерье ".." "мастер" "образы")))
 
 ;; --- текущий поток ---
 
@@ -54,7 +57,7 @@
 
 (define каталог-потоков-п
   (make-parameter
-   (build-path (current-directory) "мастер" "потоки")))
+   (build-path корень-подмастерье ".." "мастер" "потоки")))
 
 (define (загрузить-поток-п путь-потока имя-пакета)
   (текущий-поток (list путь-потока имя-пакета)))
@@ -101,12 +104,15 @@
 
 ;; --- выполнение задачи в SBCL ---
 
+(define (->string п)
+  (if (path? п) (path->string п) п))
+
 (define (выполнить-в-sbcl путь-потока имя-пакета задача)
   (let* ((путь-sbcl (find-executable-path "sbcl"))
-         (исп (path->string (путь-исполнителя)))
+         (исп (->string (путь-исполнителя)))
          (загрузка (format "(load ~s :verbose nil :print nil)" исп))
          (вызов (format "(let* ((ф (funcall (intern \"ЗАПУСК\" \"ИСПОЛНИТЕЛЬ\") ~s ~s ~s))) (princ ф) (finish-output) (sb-ext:exit :code 0))"
-                         (path->string путь-потока)
+                         (->string путь-потока)
                          имя-пакета
                          задача)))
     (unless путь-sbcl
@@ -141,7 +147,7 @@
                   (subprocess #f #f #f
                               путь-sbcl
                               "--noinform" "--non-interactive"
-                              "--core" (path->string путь-образа)
+                              "--core" (->string путь-образа)
                               "--eval" выражение)])
       (close-output-port вход)
       (let ((вывод (port->string выход))
@@ -207,9 +213,9 @@
   (displayln "Подмастерье запущен. Ожидаю задачи...")
   (загрузить-активный-поток)
   (let цикл ((сдвиг 0))
-    (with-handlers ([exn:fail:network?
+    (with-handlers ([exn:fail?
                      (lambda (e)
-                       (displayln (format "Ошибка сети: ~a" (exn-message e)))
+                       (displayln (format "Ошибка: ~a" (exn-message e)))
                        (sleep 5)
                        (цикл сдвиг))])
       (let* ((ответ (получить-обновления-п сдвиг))
