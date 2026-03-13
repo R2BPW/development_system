@@ -59,6 +59,6 @@ OpenRouter key: env `OPENROUTER_API_KEY`. Модель LLM: `openai/gpt-4.1`.
 
 - [x] **[MAIN]** Создать `мастер/cl/main.lisp`: `start ()` — загружает потоки, запускает poll-loop. `poll-loop (offset)` — рекурсивный, обрабатывает updates, вызывает обработчик, шлёт ответ. `обработать-update (update)` — dispatch по типу (message / callback_query)
 
-- [ ] **[START]** Создать `мастер/cl/start.sh`: запускает sbcl, загружает систему :мастер через quicklisp, вызывает мастер:start. Пробрасывает env переменные
+- [x] **[START]** Создать `мастер/cl/start.sh`: запускает sbcl, загружает систему :мастер через quicklisp, вызывает мастер:start. Пробрасывает env переменные
 
 - [ ] **[TESTS]** Создать `мастер/cl/тесты.lisp`: smoke-тесты с (assert ...). Тест api-url формата. Тест душа->системный-промпт на fixture. Тест список-потоков находит файлы. Тест обработать-команду "/старт" → содержит "Мастер". Запускать: sbcl --load тесты.lisp
