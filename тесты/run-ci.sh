@@ -2,7 +2,7 @@
 # run-ci.sh — CI entrypoint: unit + master тесты (без API-ключей)
 # Код выхода = число ошибок
 
-set -euo pipefail
+set -uo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 

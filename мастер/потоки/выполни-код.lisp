@@ -3,6 +3,8 @@
   (:export #:выполнить))
 (in-package :поток-выполни-код)
 
+(ql:quickload '("dexador" "cl-json") :silent t)
+
 (defun %ключ () (sb-ext:posix-getenv "OPENROUTER_API_KEY"))
 
 (defun %запрос-llm (задача)
@@ -28,7 +30,7 @@
     (if (and begin end) (string-trim '(#\Newline #\Space) (subseq текст begin end)) текст)))
 
 (defun %запустить-python (код)
-  (let ((файл "/tmp/выполни_код.py"))
+  (let ((файл (format nil "/tmp/выполни-код-~A-~A.py" (get-universal-time) (random 1000000))))
     (with-open-file (f файл :direction :output :if-exists :supersede)
       (write-string код f))
     (handler-case
