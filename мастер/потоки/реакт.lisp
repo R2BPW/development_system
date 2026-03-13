@@ -70,7 +70,8 @@
 
 (defun вызов-llm (сообщения)
   "Обращается к OpenRouter, возвращает текст ответа."
-  (let* ((ключ (sb-ext:posix-getenv "OPENROUTER_API_KEY"))
+  (let* ((ключ (or (sb-ext:posix-getenv "OPENROUTER_API_KEY")
+                   (error "OPENROUTER_API_KEY не задан")))
          (тело (cl-json:encode-json-to-string
                 `((:model    . ,*модель*)
                   (:messages . ,сообщения))))
@@ -83,13 +84,14 @@
                       :additional-headers `(("Authorization" . ,(format nil "Bearer ~a" ключ)))
                       :external-format-in  :utf-8
                       :external-format-out :utf-8))
-         (json (cl-json:decode-json-from-string
-                (if (stringp ответ-тело) ответ-тело
-                    (flexi-streams:octets-to-string ответ-тело :external-format :utf-8))))
+         (текст (if (stringp ответ-тело) ответ-тело
+                    (flexi-streams:octets-to-string ответ-тело :external-format :utf-8)))
+         (json (cl-json:decode-json-from-string текст))
          (варианты (cdr (assoc :choices json)))
          (первый   (and варианты (car варианты)))
-         (сообщ    (cdr (assoc :message первый))))
-    (or (cdr (assoc :content сообщ)) "")))
+         (сообщ    (cdr (assoc :message первый)))
+         (контент  (cdr (assoc :content сообщ))))
+    (or контент (error "Пустой ответ от модели: ~a" текст))))
 
 ;;; --- парсинг ответа агента ---
 
@@ -158,13 +160,12 @@
   "Запускает ReAct-агента для решения задачи."
   (when (find-package :трас)
     (funcall (intern "НАЧАТЬ-СЛЕД" :трас) "реакт" задача))
-  (restart-case
+  (handler-case
       (let* ((сообщения (list `((:role . "system") (:content . ,*системный-промпт*))
                                `((:role . "user")   (:content . ,задача))))
              (итог (шаг-реакт сообщения 1)))
         (when (find-package :трас)
           (funcall (intern "ЗАВЕРШИТЬ-СЛЕД" :трас) итог))
         итог)
-    (вернуть-ошибку (e)
-      :report "Вернуть описание ошибки"
+    (error (e)
       (format nil "Ошибка ReAct-агента: ~a" e))))
