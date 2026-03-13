@@ -4,3 +4,11 @@
 
 # Racket compiled bytecode
 compiled/
+
+# Секреты и переменные окружения
+.env
+.env.*
+*.env
+*.secret
+secrets/
+душа.local.scm
