@@ -9,7 +9,7 @@
 (defun читать-душу (путь)
   "Читает файл души из пути. Формат файла: (душа (ключ значение) ...)."
   (let ((данные (with-open-file (in путь :direction :input)
-                  (read in))))
+                  (let ((*read-eval* nil)) (read in)))))
     (unless (and (listp данные) (eql (first данные) 'душа))
       (error "Неверный формат файла души: ~A" путь))
     данные))

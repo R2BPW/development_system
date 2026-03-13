@@ -1,7 +1,8 @@
 (in-package #:мастер)
 
 (defun %join (sep strings)
-  (reduce (lambda (a b) (concatenate 'string a sep b)) strings :initial-value ""))
+  (if (null strings) ""
+      (reduce (lambda (a b) (concatenate 'string a sep b)) strings)))
 
 (defun комбинировать (потоки задача &key параллельно)
   "Выполнить ПОТОКИ (список имён) над ЗАДАЧЕЙ.

@@ -69,7 +69,7 @@
 
 (defun выполнить-питон (код)
   "Записать код во временный файл и выполнить python3."
-  (let ((путь (format nil "/tmp/поток-питон-~A.py" (get-universal-time))))
+  (let ((путь (format nil "/tmp/поток-питон-~A-~A.py" (get-universal-time) (random 1000000))))
     (with-open-file (п путь :direction :output
                             :if-exists :supersede
                             :external-format :utf-8)

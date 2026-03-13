@@ -46,20 +46,21 @@
 
 (defun калькулятор (выражение)
   "Вычисляет арифметическое выражение."
-  (restart-case
+  (handler-case
       (let* ((очищено (remove-if (lambda (c)
                                    (not (member c '(#\0 #\1 #\2 #\3 #\4 #\5
                                                     #\6 #\7 #\8 #\9 #\. #\+
                                                     #\- #\* #\/ #\( #\) #\space))))
                                  выражение))
+             (*read-eval* nil)
              (результат (eval (read-from-string очищено))))
         (format nil "~a" результат))
-    (ошибка-вычисления ()
+    (error ()
       (format nil "Ошибка: не удалось вычислить ~s" выражение))))
 
 (defun поиск (запрос)
   "Поиск через DuckDuckGo Instant Answer API."
-  (restart-case
+  (handler-case
       (let* ((кодировка (%url-encode запрос))
              (url (format nil
                           "https://api.duckduckgo.com/?q=~a&format=json&no_html=1&skip_disambig=1"
@@ -75,7 +76,7 @@
           ((and ответ-dd (> (length ответ-dd) 0)) ответ-dd)
           ((and абстракт (> (length абстракт) 0)) абстракт)
           (t "Результатов не найдено. Попробуй уточнить запрос.")))
-    (ошибка-поиска ()
+    (error ()
       "Ошибка при обращении к поисковику.")))
 
 ;;; --- LLM ---

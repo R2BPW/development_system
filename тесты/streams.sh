@@ -72,8 +72,10 @@ elif ! command -v python3 &>/dev/null; then
   echo "  SKIP (no python3)"
 else
   out=$(run_stream "$STREAMS/выполни-код.lisp" "ПОТОК-ВЫПОЛНИ-КОД" "напиши print(7*6)")
-  if echo "$out" | grep -q "42\|Ошибка\|error\|Error"; then
+  if echo "$out" | grep -q "42"; then
     ok "got result: '$out'"
+  elif echo "$out" | grep -qi "Ошибка\|error"; then
+    fail "got error" "$out"
   elif [[ ${#out} -gt 0 ]]; then
     ok "got output (${#out}c): $out"
   else
@@ -88,8 +90,10 @@ if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
   echo "  SKIP (no API key)"
 else
   out=$(run_stream "$STREAMS/реакт.lisp" "ПОТОК-РЕАКТ" "how much is 15 times 7?")
-  if echo "$out" | grep -q "105\|Ошибка\|Error"; then
-    ok "correct/error: '$out'"
+  if echo "$out" | grep -q "105"; then
+    ok "correct: '$out'"
+  elif echo "$out" | grep -qi "Ошибка\|error"; then
+    fail "got error" "$out"
   elif [[ ${#out} -gt 3 ]]; then
     ok "got answer (${#out}c): $out"
   else
@@ -104,8 +108,10 @@ if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
   echo "  SKIP (no API key)"
 else
   out=$(run_stream "$STREAMS/порождатель.lisp" "ПОТОК-ПОРОЖДАТЕЛЬ" "поток который возвращает текущее время в формате HH:MM:SS")
-  if echo "$out" | grep -qi "порождён\|Ошибка\|error\|Error"; then
+  if echo "$out" | grep -qi "порождён"; then
     ok "spawner result: '$out'"
+  elif echo "$out" | grep -qi "Ошибка\|error"; then
+    fail "got error" "$out"
   elif [[ ${#out} -gt 3 ]]; then
     ok "got output (${#out}c): $out"
   else

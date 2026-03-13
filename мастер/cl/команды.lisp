@@ -62,10 +62,11 @@
         (if (gethash имя *активные-потоки*)
             (progn (remhash имя *активные-потоки*)
                    (format nil "~A остановлен." имя))
-            (progn (загрузить-поток
-                    (merge-pathnames (format nil "~A.lisp" имя) *каталог-потоков*))
-                   (setf (gethash имя *активные-потоки*) t)
-                   (format nil "~A активирован." имя))))))
+            (if (загрузить-поток
+                 (merge-pathnames (format nil "~A.lisp" имя) *каталог-потоков*))
+                (progn (setf (gethash имя *активные-потоки*) t)
+                       (format nil "~A активирован." имя))
+                (format nil "Не удалось загрузить ~A." имя))))))
 
 (defun %обр-состояние (chat-id args)
   (declare (ignore chat-id args))

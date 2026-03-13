@@ -125,7 +125,7 @@ echo ""
 echo "▶ свободный текст → LLM ответ"
 send "скажи одно слово: привет"
 WAIT=30
-if wait_for "." > /dev/null 2>&1; then
+if wait_for "[а-яА-Яa-zA-Z]" > /dev/null 2>&1; then
   ok "свободный текст получил ответ от LLM"
 else
   fail "свободный текст не получил ответа"
