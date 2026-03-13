@@ -139,6 +139,10 @@
 
 (define (проверить-поток путь)
   (let* ((путь-sbcl (find-executable-path "sbcl"))
+         (ql-init (path->string
+                   (build-path (find-system-path 'home-dir) "quicklisp" "setup.lisp")))
+         (загрузить-ql (format "(when (probe-file ~s) (load ~s :verbose nil :print nil))" ql-init ql-init))
+         (загрузить-зависимости "(when (find-package :ql) (funcall (intern \"QUICKLOAD\" :ql) '(\"drakma\" \"cl-json\" \"flexi-streams\" \"uiop\") :silent t))")
          (выражение
           (format "(multiple-value-bind (fasl warn fail) (compile-file ~s) (if fail (sb-ext:exit :code 1) (sb-ext:exit :code 0)))"
                   (path->string путь))))
@@ -148,6 +152,8 @@
                   (subprocess #f #f #f
                               путь-sbcl
                               "--noinform" "--non-interactive"
+                              "--eval" загрузить-ql
+                              "--eval" загрузить-зависимости
                               "--eval" выражение)])
       (close-output-port вход)
       (let ((вывод (port->string выход))
