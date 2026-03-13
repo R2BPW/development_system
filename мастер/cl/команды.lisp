@@ -1,100 +1,111 @@
-;;;; команды.lisp — обработчики Telegram-команд
 (in-package #:мастер)
 
-;;; Импортируем зависимости
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (import '(мастер:запустить-поток мастер:список-потоков мастер:активные-потоки
-            мастер:загрузить-поток мастер:комбинировать
-            мастер:читать-душу мастер:писать-душу мастер:душа->системный-промпт
-            мастер:загрузить-историю мастер:сохранить-историю мастер:добавить-сообщение мастер:очистить-историю)))
+(defun %split-words (str)
+  (let ((result '()) (current (make-array 0 :element-type 'character :adjustable t :fill-pointer 0)))
+    (loop for ch across str do
+          (if (char= ch #\Space)
+              (when (plusp (length current))
+                (push (copy-seq current) result)
+                (setf (fill-pointer current) 0))
+              (vector-push-extend ch current)))
+    (when (plusp (length current)) (push (copy-seq current) result))
+    (nreverse result)))
 
-(defun команды-распределение ()
-  "Алиас-команды (lowercase) к соответствующему обработчику."
-  (list
-   (cons "/старт" #'обработчик-старт)
-   (cons "/породить" #'обработчик-породить)
-   (cons "/запустить" #'обработчик-запустить)
-   (cons "/остановить" #'обработчик-остановить)
-   (cons "/потоки" #'обработчик-потоки)
-   (cons "/переключить" #'обработчик-переключить)
-   (cons "/состояние" #'обработчик-состояние)
-   (cons "/диалог" #'обработчик-диалог)
-   (cons "/сбросить" #'обработчик-сбросить)
-   ))
+(defun %cmd-args (text)
+  "Разбить текст на (cmd . args-list)."
+  (let ((words (%split-words text)))
+    (values (string-downcase (first words)) (rest words))))
 
-;;; --- Обработчики команд ---
-(defun обработчик-старт (chat-id args)
-  (declare (ignore args))
-  (let ((душа (читать-душу *путь-души*)))
-    (format nil "Привет! Я ~A. Чем помочь?\n/info: ~A"
-            (getf душа :имя "Мастер")
-            (getf душа :описание "")
-            )))
+;; --- обработчики ---
 
-(defun обработчик-потоки (chat-id args)
-  (declare (ignore args chat-id))
-  (let ((потоки (список-потоков)))
-    (if потоки
-        (format nil "Доступные потоки:\n~{~A~^, ~}" потоки)
-        "Нет доступных потоков.")))
+(defun %обр-старт (chat-id args)
+  (declare (ignore chat-id args))
+  (let ((душа (ignore-errors (читать-душу *путь-души*))))
+    (format nil "Привет! Я ~A. ~A~%Команды: /потоки /запустить /остановить /состояние /диалог /сбросить"
+            (if душа (getf душа :имя) "Мастер")
+            (if душа (getf душа :описание) ""))))
 
-(defun обработчик-запустить (chat-id args)
-  (if (null args)
-      "Укажите имя потока и задачу: /запустить <имя> <задача>"
+(defun %обр-потоки (chat-id args)
+  (declare (ignore chat-id args))
+  (let ((list (список-потоков)))
+    (if list (format nil "Потоки: ~{~A~^, ~}" list) "Нет потоков.")))
+
+(defun %обр-запустить (chat-id args)
+  (declare (ignore chat-id))
+  (if (< (length args) 2)
+      "Использование: /запустить <имя> <задача>"
       (let* ((имя (first args))
              (задача (format nil "~{~A~^ ~}" (rest args)))
              (рез (запустить-поток имя задача)))
-        (or рез (format nil "Ошибка запуска потока ~A" имя)))))
+        (or рез (format nil "Ошибка запуска ~A" имя)))))
 
-(defun обработчик-остановить (chat-id args)
-  (declare (ignore args))
-  (clrhash (активные-потоки))
+(defun %обр-остановить (chat-id args)
+  (declare (ignore chat-id args))
+  (clrhash *активные-потоки*)
   "Все потоки остановлены.")
 
-(defun обработчик-переключить (chat-id args)
-  (if (< (length args) 1)
-      "Использование: /переключить <имя-потока>"
-      (let* ((имя (first args))
-             (p (загрузить-поток имя)))
-        (if p (format nil "Поток ~A стал активным." имя)
-              (format nil "Поток ~A не найден." имя)))))
+(defun %обр-переключить (chat-id args)
+  (declare (ignore chat-id))
+  (if (null args)
+      "Использование: /переключить <имя>"
+      (let ((имя (first args)))
+        (if (gethash имя *активные-потоки*)
+            (progn (remhash имя *активные-потоки*) (format nil "~A остановлен." имя))
+            (progn (загрузить-поток (merge-pathnames (format nil "~A.lisp" имя) *каталог-потоков*))
+                   (setf (gethash имя *активные-потоки*) t)
+                   (format nil "~A активирован." имя))))))
 
-(defun обработчик-состояние (chat-id args)
-  (declare (ignore args))
-  (let ((актив (loop for k being the hash-keys of (активные-потоки)
-                     collect k)))
-    (if актив
-        (format nil "Активные потоки: ~{~A~^, ~}" актив)
-        "Нет активных потоков.")))
+(defun %обр-состояние (chat-id args)
+  (declare (ignore chat-id args))
+  (let ((акт (активные-потоки)))
+    (if акт (format nil "Активные: ~{~A~^, ~}" акт) "Нет активных потоков.")))
 
-(defun обработчик-породить (chat-id args)
-  "Заглушка — требует интеграции с LLM и создания потока."
-  "Порождение потоков временно недоступно.")
+(defun %обр-породить (chat-id args)
+  (declare (ignore chat-id))
+  (if (null args)
+      "Использование: /породить <описание>"
+      (let ((описание (format nil "~{~A~^ ~}" args)))
+        (handler-case
+            (let ((fn (ignore-errors
+                        (symbol-function (find-symbol "ВЫПОЛНИТЬ" (find-package "ПОРОЖДАТЕЛЬ"))))))
+              (if fn (funcall fn описание) "Порождатель не загружен."))
+          (error (e) (format nil "Ошибка: ~A" e))))))
 
-(defun обработчик-диалог (chat-id args)
-  (let ((история (загрузить-историю chat-id)))
-    (if (and история (> (length история) 0))
-        (with-output-to-string (s)
-          (dolist (x история)
-            (princ (getf x :role) s)
-            (princ ": " s)
-            (princ (getf x :content) s)
-            (terpri s)))
-        "Диалог пуст.")))
+(defun %обр-диалог (chat-id args)
+  (let* ((текст (format nil "~{~A~^ ~}" args))
+         (душа (ignore-errors (читать-душу *путь-души*)))
+         (системный (if душа (душа->системный-промпт душа) nil))
+         (история (or (загрузить-историю chat-id) '())))
+    (when (plusp (length текст))
+      (добавить-сообщение chat-id "user" текст))
+    (let* ((resp (llm-complete текст :system системный
+                               :messages (загрузить-историю chat-id))))
+      (добавить-сообщение chat-id "assistant" resp)
+      resp)))
 
-(defun обработчик-сбросить (chat-id args)
+(defun %обр-сбросить (chat-id args)
   (declare (ignore args))
   (очистить-историю chat-id)
   "Диалог сброшен.")
 
-;;; ----- Роутинг команд -----
+;; --- роутинг ---
+
+(defparameter *команды*
+  (list (cons "/старт"      #'%обр-старт)
+        (cons "/start"      #'%обр-старт)
+        (cons "/потоки"     #'%обр-потоки)
+        (cons "/запустить"  #'%обр-запустить)
+        (cons "/остановить" #'%обр-остановить)
+        (cons "/переключить" #'%обр-переключить)
+        (cons "/состояние"  #'%обр-состояние)
+        (cons "/породить"   #'%обр-породить)
+        (cons "/диалог"     #'%обр-диалог)
+        (cons "/сбросить"   #'%обр-сбросить)))
+
 (defun обработать-команду (chat-id text)
-  "Распознаёт команду в text и вызывает соответствующий обработчик."
-  (let* ((words (split-sequence:split-sequence #\Space text))
-         (cmd (string-downcase (first words)))
-         (args (rest words))
-         (таблица (команды-распределение))
-         (обработчик (cdr (assoc cmd таблица :test #'string=))))
-    (if обработчик
-        (funcall обработчик chat-id args)
-        "Неизвестная команда.")))
+  (multiple-value-bind (cmd args) (%cmd-args text)
+    (let ((fn (cdr (assoc cmd *команды* :test #'string=))))
+      (if fn
+          (handler-case (funcall fn chat-id args)
+            (error (e) (format nil "Ошибка: ~A" e)))
+          (format nil "Неизвестная команда: ~A" cmd)))))

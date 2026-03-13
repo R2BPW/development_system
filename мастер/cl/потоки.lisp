@@ -3,33 +3,34 @@
 (defparameter *активные-потоки* (make-hash-table :test #'equal))
 
 (defun список-потоков ()
-  "Возвращает список имён потоков (без расширения .lisp) из каталога потоков."
-  (let* ((files (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
-    (mapcar (lambda (path)
-              (string-left-trim
-               '(#\/) (subseq (namestring path) 0 (- (length (namestring path)) 5))))
-            files)))
+  "Имена потоков (строки, без .lisp) из каталога потоков."
+  (mapcar (lambda (p) (pathname-name p))
+          (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
 
 (defun загрузить-поток (путь)
-  "Загружает .lisp-файл потока по абс. пути. true если успех."
-  (ignore-errors (load путь)))
+  "Загружает .lisp-файл потока. Возвращает t/nil."
+  (not (null (ignore-errors (load путь)))))
 
 (defun загрузить-все-потоки ()
-  "Загружает все потоки из каталога потоков."
-  (mapc #'загрузить-поток
-        (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
+  (dolist (p (directory (merge-pathnames "*.lisp" *каталог-потоков*)))
+    (загрузить-поток p)))
+
+(defun %найти-выполнить (имя)
+  "Ищет функцию ВЫПОЛНИТЬ в пакете потока."
+  (let ((pkg (find-package (string-upcase имя))))
+    (when pkg
+      (let ((sym (find-symbol "ВЫПОЛНИТЬ" pkg)))
+        (when (and sym (fboundp sym)) (symbol-function sym))))))
 
 (defun запустить-поток (имя задача)
-  "Запустить поток с данным ИМЯ и задачей (строка). Возвращает вывод."
+  "Запустить поток ИМЯ с задачей ЗАДАЧА. Возвращает строку-результат."
   (let* ((путь (merge-pathnames (format nil "~A.lisp" имя) *каталог-потоков*)))
     (when (probe-file путь)
       (загрузить-поток путь)
-      (let ((fn (or (ignore-errors (symbol-function 'выполнить))
-                    (fdefinition (find-symbol "ВЫПОЛНИТЬ" :cl-user)))))
+      (let ((fn (%найти-выполнить имя)))
         (when fn
           (setf (gethash имя *активные-потоки*) t)
           (funcall fn задача))))))
 
 (defun активные-потоки ()
-  "Список активных потоков (имён)"
   (loop for k being the hash-keys of *активные-потоки* collect k))

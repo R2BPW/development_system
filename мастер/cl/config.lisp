@@ -1,12 +1,7 @@
 (in-package #:мастер)
 
-(defparameter *токен*
-  (or (uiop:getenv "MASTER_BOT_TOKEN")
-      (error "Переменная среды MASTER_BOT_TOKEN не установлена")))
-
-(defparameter *admin-id*
-  (let ((id (uiop:getenv "ADMIN_CHAT_ID")))
-    (or id (error "Переменная среды ADMIN_CHAT_ID не установлена"))))
+(defparameter *токен* (uiop:getenv "MASTER_BOT_TOKEN"))
+(defparameter *admin-id* (uiop:getenv "ADMIN_CHAT_ID"))
 
 (defparameter *корень*
   (uiop:pathname-parent-directory-pathname (uiop:getcwd)))

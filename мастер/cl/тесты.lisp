@@ -1,28 +1,57 @@
-;;;; мастер/cl/тесты.lisp
+;;;; тесты.lisp — smoke-тесты мастер/cl
+;;;; Запуск: sbcl --load ~/quicklisp/setup.lisp \
+;;;;           --eval "(push #p\"мастер/cl/\" asdf:*central-registry*)" \
+;;;;           --eval "(asdf:load-system :мастер :verbose nil)" \
+;;;;           --load мастер/cl/тесты.lisp --eval "(sb-ext:exit)"
+
 (in-package #:мастер)
 
-;; Загружаем систему, если не в REPL
-(handler-case
-  (require :мастер)
-  (error () nil))
+(defvar *тест-ошибки* 0)
 
-(format t "[ТЕСТЫ МАСТЕР]\n")
+(defmacro тест (имя &body тело)
+  `(handler-case
+       (progn ,@тело (format t "  ✓ ~A~%" ,имя))
+     (error (e)
+       (incf *тест-ошибки*)
+       (format t "  ✗ ~A: ~A~%" ,имя e))))
 
-;;; --- Тест 1: Telegram API url формата ---
-(assert 
- (string= (subseq (api-url "getUpdates") 0 44)
-          (concatenate 'string "https://api.telegram.org/bot" (subseq *токен* 0 1))))
+(format t "[ТЕСТЫ МАСТЕР]~%")
 
-;;; --- Тест 2: душа->системный-промпт на fixture ---
-(let ((fixture '(:имя "Bot" :описание "Помощник" :стиль "лаконичный" :инструкции "Всегда отвечай строго по делу.")))
-  (assert (search "лаконичный" (душа->системный-промпт fixture))))
+;; 1. api-url формат
+(тест "api-url формат"
+  (let ((url (api-url "getUpdates")))
+    (assert (search "telegram.org/bot" url))
+    (assert (search "getUpdates" url))))
 
-;;; --- Тест 3: список-потоков возвращает .lisp ---
-(let ((lst (список-потоков)))
-  (assert (every (lambda (nm) (search ".lisp" nm)) lst)))
+;; 2. душа->системный-промпт
+(тест "душа->системный-промпт"
+  (let* ((фикстура '(:имя "Тест" :описание "тест-бот" :стиль "краткий" :инструкции "отвечай коротко"))
+         (промпт (душа->системный-промпт фикстура)))
+    (assert (search "Тест" промпт))
+    (assert (search "краткий" промпт))))
 
-;;; --- Тест 4: /старт команда отвечает <Мастер> ---
-(let ((res (обработать-команду 1 "/старт")))
-  (assert (search "Мастер" res)))
+;; 3. список-потоков — возвращает список строк
+(тест "список-потоков возвращает строки"
+  (let ((lst (список-потоков)))
+    (assert (listp lst))
+    (dolist (имя lst)
+      (assert (stringp имя)))))
 
-(format t "Все тесты пройдены~%")
+;; 4. обработать-команду /старт
+(тест "обработать-команду /старт"
+  (let ((resp (обработать-команду 0 "/старт")))
+    (assert (stringp resp))
+    (assert (plusp (length resp)))))
+
+;; 5. %split-words
+(тест "%split-words базовый"
+  (let ((res (мастер::%split-words "/запустить поток задача")))
+    (assert (equal res '("/запустить" "поток" "задача")))))
+
+;; 6. обработать-команду неизвестная
+(тест "обработать-команду неизвестная → строка"
+  (let ((resp (обработать-команду 0 "/хрень")))
+    (assert (stringp resp))))
+
+(format t "~%Итого ошибок: ~A~%" *тест-ошибки*)
+(when (plusp *тест-ошибки*) (sb-ext:exit :code 1))

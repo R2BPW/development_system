@@ -17,9 +17,9 @@
                               (list (list :role "user" :content prompt))))))))
          (headers `(("Authorization" . ,(format nil "Bearer ~a" *openrouter-key*))
                     ("Content-Type" . "application/json")))
-         (response (dexador:http-post *openrouter-api-url*
-                                      :content body-json
-                                      :headers headers)))
+         (response (dexador:post *openrouter-api-url*
+                                :content body-json
+                                :headers headers)))
     ;; Response is a string. Parse JSON.
     (let* ((json (ignore-errors (cl-json:decode-json-from-string response)))
            (choices (cdr (assoc :choices json))))
