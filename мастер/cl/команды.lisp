@@ -110,8 +110,8 @@
     ("Сбросить"       . "/сбросить")))
 
 (defun %кнопка->команда (text)
-  "Ищет кириллический ключ как подстроку — не зависит от emoji."
-  (cdr (find-if (lambda (p) (search (car p) text)) *кнопки*)))
+  "Точный матч: кнопка всегда содержит ровно то что в таблице."
+  (cdr (assoc text *кнопки* :test #'string=)))
 
 (defun обработать-команду (chat-id text)
   (let* ((t0 (string-trim '(#\Space #\Newline #\Return) text))
