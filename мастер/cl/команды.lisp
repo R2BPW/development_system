@@ -12,11 +12,19 @@
 
 ;; ─── обработчики ─────────────────────────────────────────────────────────────
 
+(defparameter *главное-меню*
+  (make-reply-keyboard
+   '(("🔧 Породить поток" "📋 Потоки")
+     ("▶️ Запустить"       "📊 Состояние")
+     ("💬 Диалог"          "🔄 Сбросить"))))
+
 (defun %обр-старт (chat-id args)
-  (declare (ignore chat-id args))
-  (let ((д (ignore-errors (читать-душу *путь-души*))))
-    (format nil "~A~%Команды: /потоки /запустить /породить /диалог /состояние /сбросить"
-            (if д (getf д :описание) "Мастер готов."))))
+  (declare (ignore args))
+  (let* ((д    (ignore-errors (читать-душу *путь-души*)))
+         (текст (format nil "~A"
+                        (if д (getf д :описание) "Мастер готов."))))
+    (send-message chat-id текст :reply-markup *главное-меню*)
+    nil))
 
 (defun %обр-потоки (chat-id args)
   (declare (ignore chat-id args))

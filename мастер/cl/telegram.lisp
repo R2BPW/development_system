@@ -51,3 +51,12 @@
                             `((:text . ,(car b)) (:callback--data . ,(cdr b))))
                           row))
                 rows))))
+
+(defun make-reply-keyboard (rows)
+  "Persistent reply keyboard. rows: ((text ...) ...) список строк кнопок."
+  `((:keyboard
+     . ,(mapcar (lambda (row)
+                  (mapcar (lambda (text) `((:text . ,text))) row))
+                rows))
+    (:resize--keyboard . t)
+    (:persistent . t)))
