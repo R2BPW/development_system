@@ -1,0 +1,154 @@
+#lang racket/base
+
+;;; Потоки — порождение и проверка вычислительных потоков
+
+(require racket/file
+         racket/format
+         racket/match
+         racket/path
+         racket/port
+         racket/string
+         racket/system
+         "dusha.rkt")
+
+(provide спросить-клод
+         сформировать-задание
+         записать-поток
+         записать-мета
+         проверить-поток
+         породить-поток
+         извлечь-код
+         имя-пакета)
+
+;; --- вызов Claude Code ---
+
+(define (спросить-клод вопрос)
+  (let-values ([(процесс выход вход ошибки)
+                (subprocess #f #f #f
+                            (find-executable-path "claude")
+                            "--print" вопрос)])
+    (close-output-port вход)
+    (let ((ответ (port->string выход)))
+      (close-input-port выход)
+      (close-input-port ошибки)
+      (subprocess-wait процесс)
+      (let ((код (subprocess-status процесс)))
+        (if (zero? код)
+            ответ
+            (error 'спросить-клод "Claude Code завершился с кодом ~a" код))))))
+
+;; --- формирование задания ---
+
+(define (сформировать-задание душа описание)
+  (let ((указание (or (получить-поле душа 'указание) ""))
+        (девиз (or (получить-поле душа 'девиз) ""))
+        (модель (or (получить-поле душа 'модель) "")))
+    (string-append
+     "Ты генератор вычислительных потоков на Common Lisp.\n"
+     "Системное указание: " указание "\n"
+     "Девиз: " девиз "\n\n"
+     "Задача: " описание "\n\n"
+     "Требования к коду:\n"
+     "- Создай пакет с именем :поток-<имя> где <имя> — краткое слово\n"
+     "- Обязательная функция (defun выполнить (задача) ...) — точка входа\n"
+     "- Рекурсия вместо loop, функции до 15 строк\n"
+     "- Русские имена для прикладных понятий\n"
+     "- Формат файла: заголовок с -*- Mode: Lisp -*-, имя, описание\n"
+     "- restart-case для обработки ошибок\n"
+     "- Верни ТОЛЬКО код Common Lisp, без пояснений\n")))
+
+;; --- извлечение кода из ответа ---
+
+(define (извлечь-код ответ)
+  (let ((строки (string-split ответ "\n")))
+    (let ищи ((ост строки) (внутри #f) (собрано '()))
+      (cond
+        [(null? ост)
+         (if (null? собрано)
+             (string-trim ответ)
+             (string-join (reverse собрано) "\n"))]
+        [(and (not внутри)
+              (let ((с (string-trim (car ост))))
+                (or (string-prefix? с "```lisp")
+                    (string-prefix? с "```common-lisp")
+                    (string-prefix? с "```cl"))))
+         (ищи (cdr ост) #t собрано)]
+        [(and внутри (string-prefix? (string-trim (car ост)) "```"))
+         (ищи (cdr ост) #f собрано)]
+        [внутри
+         (ищи (cdr ост) #t (cons (car ост) собрано))]
+        [else
+         (ищи (cdr ост) #f собрано)]))))
+
+;; --- имя пакета из кода ---
+
+(define (имя-пакета код)
+  (let ((совп (regexp-match #rx":поток-([^ )]+)" код)))
+    (if совп
+        (cadr совп)
+        "безымянный")))
+
+;; --- запись файлов ---
+
+(define (записать-поток каталог имя код)
+  (let ((путь (build-path каталог (string-append имя ".lisp"))))
+    (unless (directory-exists? каталог)
+      (make-directory* каталог))
+    (call-with-output-file путь
+      (lambda (порт) (display код порт) (newline порт))
+      #:exists 'replace)
+    путь))
+
+(define (записать-мета каталог имя описание)
+  (let ((путь (build-path каталог (string-append имя ".мета")))
+        (с (seconds->date (current-seconds))))
+    (call-with-output-file путь
+      (lambda (порт)
+        (fprintf порт "(мета\n")
+        (fprintf порт "  (имя         ~s)\n" имя)
+        (fprintf порт "  (создан      ~s)\n"
+                 (format "~a-~a-~aT~a:~a:~a"
+                         (date-year с)
+                         (~a (date-month с) #:min-width 2 #:pad-string "0" #:align 'right)
+                         (~a (date-day с) #:min-width 2 #:pad-string "0" #:align 'right)
+                         (~a (date-hour с) #:min-width 2 #:pad-string "0" #:align 'right)
+                         (~a (date-minute с) #:min-width 2 #:pad-string "0" #:align 'right)
+                         (~a (date-second с) #:min-width 2 #:pad-string "0" #:align 'right)))
+        (fprintf порт "  (описание    ~s)\n" описание)
+        (fprintf порт "  (зависимости ())\n")
+        (fprintf порт "  (входит-в    ())\n")
+        (fprintf порт "  (состояние   :готов))\n"))
+      #:exists 'replace)
+    путь))
+
+;; --- проверка потока в SBCL ---
+
+(define (проверить-поток путь)
+  (let* ((выражение
+          (format "(multiple-value-bind (fasl warn fail) (compile-file ~s) (if fail (sb-ext:exit :code 1) (sb-ext:exit :code 0)))"
+                  (path->string путь))))
+    (let-values ([(процесс выход вход ошибки)
+                  (subprocess #f #f #f
+                              (find-executable-path "sbcl")
+                              "--noinform" "--non-interactive"
+                              "--eval" выражение)])
+      (close-output-port вход)
+      (let ((вывод (port->string выход))
+            (ош (port->string ошибки)))
+        (close-input-port выход)
+        (close-input-port ошибки)
+        (subprocess-wait процесс)
+        (let ((код (subprocess-status процесс)))
+          (values (zero? код) (string-append вывод ош)))))))
+
+;; --- главная функция порождения ---
+
+(define (породить-поток душа описание каталог)
+  (let* ((задание (сформировать-задание душа описание))
+         (ответ (спросить-клод задание))
+         (код (извлечь-код ответ))
+         (имя (имя-пакета код))
+         (путь-потока (записать-поток каталог имя код))
+         (путь-мета (записать-мета каталог имя описание)))
+    (let-values ([(успех? вывод) (проверить-поток путь-потока)])
+      (list успех? имя путь-потока путь-мета вывод))))
