@@ -21,9 +21,9 @@
 (defun %обр-старт (chat-id args)
   (declare (ignore args))
   (let* ((д     (ignore-errors (читать-душу *путь-души*)))
-         (текст (if д (getf д :описание) "Мастер готов.")))
+         (текст (or (and д (getf д :описание)) "Мастер готов.")))
     (send-message chat-id текст :reply-markup *главное-меню*)
-    nil))  ; nil = dispatch не посылает ничего дополнительно
+    nil))
 
 (defun %обр-потоки (chat-id args)
   (declare (ignore chat-id args))
