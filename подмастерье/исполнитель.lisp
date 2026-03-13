@@ -51,7 +51,7 @@
                                      (make-pathname
                                       :defaults *load-pathname*
                                       :name nil :type nil)))
-         (путь-журнала (uiop:getenv "TRACE_FILE")))
+         (путь-журнала (sb-ext:posix-getenv "TRACE_FILE")))
     (when (and путь-журнала (probe-file путь-трас))
       (load путь-трас :verbose nil :print nil)
       (when (find-package :трас)

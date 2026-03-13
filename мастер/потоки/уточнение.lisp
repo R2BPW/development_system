@@ -9,7 +9,7 @@
 
 (defun ключ-api ()
   "Ключ OpenRouter из окружения."
-  (or (uiop:getenv "OPENROUTER_API_KEY")
+  (or (sb-ext:posix-getenv "OPENROUTER_API_KEY")
       (error "Не задан OPENROUTER_API_KEY")))
 
 (defun тело-запроса (сообщения)

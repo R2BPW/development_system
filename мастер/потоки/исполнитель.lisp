@@ -10,7 +10,7 @@
 (ql:quickload '("drakma" "cl-json" "flexi-streams") :silent t)
 
 (defun ключ-api ()
-  (or (uiop:getenv "OPENROUTER_API_KEY")
+  (or (sb-ext:posix-getenv "OPENROUTER_API_KEY")
       (error "Нет OPENROUTER_API_KEY")))
 
 (defun собрать-сообщения (задача)

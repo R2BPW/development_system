@@ -70,7 +70,7 @@
 
 (defun вызов-llm (сообщения)
   "Обращается к OpenRouter, возвращает текст ответа."
-  (let* ((ключ (uiop:getenv "OPENROUTER_API_KEY"))
+  (let* ((ключ (sb-ext:posix-getenv "OPENROUTER_API_KEY"))
          (тело (cl-json:encode-json-to-string
                 `((:model    . ,*модель*)
                   (:messages . ,сообщения))))
