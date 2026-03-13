@@ -47,7 +47,7 @@ OpenRouter key: env `OPENROUTER_API_KEY`. Модель LLM: `openai/gpt-4.1`.
 
 - [x] **[LLM]** Создать `мастер/cl/llm.lisp`: функция `llm-complete (prompt &key model system messages)` → строка. POST к https://openrouter.ai/api/v1/chat/completions через dexador, парсинг cl-json
 
-- [ ] **[DUSHA]** Создать `мастер/cl/dusha.lisp`: `читать-душу (путь)` → plist, `писать-душу (душа путь)`, `душа->системный-промпт (душа)` → строка. Формат файла — read-able S-expression
+- [x] **[DUSHA]** Создать `мастер/cl/dusha.lisp`: `читать-душу (путь)` → plist, `писать-душу (душа путь)`, `душа->системный-промпт (душа)` → строка. Формат файла — read-able S-expression
 
 - [ ] **[ИСТОРИЯ]** Создать `мастер/cl/история.lisp`: `загрузить-историю (chat-id)` → list, `сохранить-историю (chat-id история)`, `добавить-сообщение (chat-id role content)`, `очистить-историю (chat-id)`. JSON хранение через cl-json
 
