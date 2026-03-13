@@ -9,14 +9,16 @@
     (error () 0)))
 
 (defun %save-offset (n)
-  (ignore-errors
-    (with-open-file (f *offset-file* :direction :output :if-exists :supersede)
-      (print n f))))
+  (handler-case
+      (with-open-file (f *offset-file* :direction :output :if-exists :supersede)
+        (print n f))
+    (error (e) (log/error "offset" "save: ~A" e))))
 
 (defun %drain-offset (saved)
   "Слить всю очередь, начиная с сохранённого offset → следующий offset."
   (labels ((drain (off)
-    (let ((upds (ignore-errors (get-updates :timeout 0 :offset off))))
+    (let ((upds (handler-case (get-updates :timeout 0 :offset off)
+                  (error (e) (log/error "drain" "~A" e) nil))))
       (if (null upds) off
           (drain (1+ (reduce #'max upds
                              :key (lambda (u) (or (cdr (assoc :update--id u)) 0))
@@ -24,20 +26,22 @@
     (drain saved)))
 
 (defun start ()
-  (format t "[мастер] Загружаем потоки...~%")
+  (log/info "мастер" "Загружаем потоки...")
   (ensure-directories-exist *каталог-истории*)
   (загрузить-все-потоки)
   (let ((offset (%drain-offset (%load-offset))))
-    (format t "[мастер] Запущен с offset=~A~%" offset)
+    (log/info "мастер" "Запущен с offset=~A" offset)
     (%save-offset offset)
     (poll-loop offset)))
 
 (defun poll-loop (start-offset)
   (loop with offset = start-offset
         while *polling*
-        do (let ((updates (ignore-errors (get-updates :offset offset :timeout 30))))
+        do (let ((updates (handler-case (get-updates :offset offset :timeout 30)
+                            (error (e) (log/error "poll" "get-updates: ~A" e) nil))))
              (dolist (upd (or updates '()))
-               (ignore-errors (обработать-update upd))
+               (handler-case (обработать-update upd)
+                 (error (e) (log/error "poll" "update: ~A" e)))
                ;; ACK сразу после обработки — offset двигается по каждому апдейту
                (let ((id (cdr (assoc :update--id upd))))
                  (when id

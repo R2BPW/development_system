@@ -20,7 +20,8 @@
 
 (defun %обр-старт (chat-id args)
   (declare (ignore chat-id args))
-  (let* ((д     (ignore-errors (читать-душу *путь-души*)))
+  (let* ((д     (handler-case (читать-душу *путь-души*)
+                  (error (e) (log/error "душа" "старт: ~A" e) nil)))
          (текст (or (and д (%душа-значение д 'указание)) "Мастер готов.")))
     (values текст *главное-меню*)))
 
@@ -83,7 +84,8 @@
 (defun %обр-диалог (chat-id args)
   (when (null args) (return-from %обр-диалог "Использование: /диалог <текст>"))
   (let* ((текст    (format nil "~{~A~^ ~}" args))
-         (душа     (ignore-errors (читать-душу *путь-души*)))
+         (душа     (handler-case (читать-душу *путь-души*)
+                    (error (e) (log/error "душа" "диалог: ~A" e) nil)))
          (история  (добавить-сообщение chat-id "user" текст))
          (ответ    (llm-complete текст
                                  :system (when душа (душа->системный-промпт душа))

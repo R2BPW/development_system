@@ -15,8 +15,8 @@
              (str  (if (stringp raw) raw
                        (sb-ext:octets-to-string raw :external-format :utf-8))))
         (cl-json:decode-json-from-string str))
-    (error ()
-      (format *error-output* "[tg] ~A error~%" method)
+    (error (e)
+      (log/error "tg" "~A: ~A" method e)
       nil)))
 
 (defvar *api-post-fn* #'%api-post-real

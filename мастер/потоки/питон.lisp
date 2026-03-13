@@ -1,14 +1,18 @@
 ;;; -*- Mode: Lisp -*-
 ;;; Имя: поток-питон
 ;;; Описание: принять задачу, спросить модель о Python-коде, выполнить, вернуть вывод
+;;; Также экспортирует общие утилиты для других потоков-исполнителей.
 
 (defpackage :поток-питон
   (:use :cl)
-  (:export #:выполнить))
+  (:export #:выполнить #:выполнить-с-моделью
+           #:запросить-модель #:извлечь-код #:очистить-код #:выполнить-питон))
 
 (in-package :поток-питон)
 
 (ql:quickload '("dexador" "cl-json") :silent t)
+
+(defvar *модель-по-умолчанию* "openai/gpt-4.1")
 
 (defun ключ-апи ()
   (or (sb-ext:posix-getenv "OPENROUTER_API_KEY")
@@ -20,33 +24,21 @@
         `((:role . "user")
           (:content . ,(format nil "Напиши Python-код для задачи: ~A" задача)))))
 
-(defun тело-запроса (задача)
+(defun тело-запроса (задача &optional (модель *модель-по-умолчанию*))
   (cl-json:encode-json-to-string
-   `((:model . "openai/gpt-4.1")
+   `((:model . ,модель)
      (:messages . ,(собрать-сообщения задача)))))
 
-(defun запросить-модель (задача)
+(defun запросить-модель (задача &optional (модель *модель-по-умолчанию*))
   (let* ((сырой (dexador:post
                  "https://openrouter.ai/api/v1/chat/completions"
-                 :content (тело-запроса задача)
+                 :content (тело-запроса задача модель)
                  :headers `(("Content-Type" . "application/json")
                             ("Authorization" . ,(format nil "Bearer ~A" (ключ-апи)))))))
     (if (stringp сырой) сырой
         (sb-ext:octets-to-string сырой :external-format :utf-8))))
 
-(defun извлечь-код (ответ-json)
-  (let* ((разбор (cl-json:decode-json-from-string ответ-json))
-         (выборы (cdr (assoc :choices разбор)))
-         (сообщение (cdr (assoc :message (car выборы))))
-         (содержимое (cdr (assoc :content сообщение))))
-    (очистить-код содержимое)))
-
-(defun очистить-код (текст)
-  (if (null текст) ""
-      (let ((ч (string-trim '(#\Space #\Newline #\Return) текст)))
-        (cond ((и-префикс-p "```python" ч) (убрать-обёртку ч))
-              ((и-префикс-p "```" ч) (убрать-обёртку ч))
-              (t ч)))))
+;;; --- извлечение и очистка кода ---
 
 (defun и-префикс-p (префикс строка)
   (and (>= (length строка) (length префикс))
@@ -59,7 +51,24 @@
     (string-trim '(#\Space #\Newline #\Return)
                  (if конец (subseq без-начала 0 конец) без-начала))))
 
+(defun очистить-код (текст)
+  (if (null текст) ""
+      (let ((ч (string-trim '(#\Space #\Newline #\Return) текст)))
+        (cond ((и-префикс-p "```python" ч) (убрать-обёртку ч))
+              ((и-префикс-p "```" ч) (убрать-обёртку ч))
+              (t ч)))))
+
+(defun извлечь-код (ответ-json)
+  (let* ((разбор (cl-json:decode-json-from-string ответ-json))
+         (выборы (cdr (assoc :choices разбор)))
+         (сообщение (cdr (assoc :message (car выборы))))
+         (содержимое (cdr (assoc :content сообщение))))
+    (очистить-код содержимое)))
+
+;;; --- выполнение Python ---
+
 (defun выполнить-питон (код)
+  "Записать код во временный файл и выполнить python3."
   (let ((путь (format nil "/tmp/поток-питон-~A.py" (get-universal-time))))
     (with-open-file (п путь :direction :output
                             :if-exists :supersede
@@ -76,11 +85,14 @@
               (format nil "Ошибка (код ~A): ~A" код-возврата ошибки)))
       (error (е) (format nil "Ошибка запуска: ~A" е)))))
 
-(defun выполнить (задача)
+;;; --- общая точка входа с параметром модели ---
+
+(defun выполнить-с-моделью (имя-потока задача модель)
+  "Общий pipeline: запросить модель → извлечь код → выполнить Python."
   (when (find-package :трас)
-    (funcall (intern "НАЧАТЬ-СЛЕД" :трас) "поток-питон" задача))
-  (restart-case
-      (let* ((сырой (запросить-модель задача))
+    (funcall (intern "НАЧАТЬ-СЛЕД" :трас) имя-потока задача))
+  (handler-case
+      (let* ((сырой (запросить-модель задача модель))
              (код (извлечь-код сырой))
              (итог (выполнить-питон код)))
         (when (find-package :трас)
@@ -88,9 +100,13 @@
           (funcall (intern "ЗАПИСАТЬ-ШАГ" :трас) 2 код итог :качество :достаточно)
           (funcall (intern "ЗАВЕРШИТЬ-СЛЕД" :трас) итог))
         итог)
-    (вернуть-ошибку (е)
-      :report "Вернуть сообщение об ошибке"
-      (let ((с (format nil "Сбой потока: ~A" е)))
+    (error (e)
+      (let ((с (format nil "Сбой потока ~A: ~A" имя-потока e)))
         (when (find-package :трас)
           (funcall (intern "ЗАВЕРШИТЬ-СЛЕД" :трас) с))
         с))))
+
+;;; --- точка входа (совместимость) ---
+
+(defun выполнить (задача)
+  (выполнить-с-моделью "поток-питон" задача *модель-по-умолчанию*))

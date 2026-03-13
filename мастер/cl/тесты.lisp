@@ -318,5 +318,56 @@
     (assert markup)
     (assert (assoc :inline--keyboard markup))))
 
+;; ── Фаза 8: рефакторинг ─────────────────────────────────────────────────────
+
+;; 38. log/info выводит timestamp и тег
+(тест "log/info формат"
+  (let ((out (with-output-to-string (*standard-output*)
+               (log/info "тест" "сообщение ~A" 42))))
+    (assert (search "[тест]" out))
+    (assert (search "сообщение 42" out))
+    ;; timestamp формат YYYY-MM-DD HH:MM:SS
+    (assert (>= (length out) 19))))
+
+;; 39. log/error выводит в *error-output*
+(тест "log/error формат"
+  (let ((out (with-output-to-string (*error-output*)
+               (log/error "err" "ошибка ~A" "тест"))))
+    (assert (search "[err]" out))
+    (assert (search "ошибка тест" out))))
+
+;; 40. %timestamp формат
+(тест "%timestamp формат YYYY-MM-DD"
+  (let ((ts (мастер::%timestamp)))
+    (assert (= (length ts) 19))
+    (assert (char= (char ts 4) #\-))
+    (assert (char= (char ts 10) #\Space))))
+
+;; 41. ignore-errors заменён — %save-offset не бросает
+(тест "%save-offset не бросает при ошибке"
+  (let ((*offset-file* "/nonexistent-dir/offset.txt"))
+    ;; handler-case ловит ошибку, не бросает наружу
+    (let ((err (with-output-to-string (*error-output*)
+                 (%save-offset 0))))
+      (assert (search "[offset]" err)))))
+
+;; 42. комбинировать с ошибкой — не бросает, логирует
+(тест "комбинировать с несуществующим потоком"
+  (let ((result (комбинировать '("несуществующий") "задача" :параллельно t)))
+    (assert (stringp result))))
+
+;; 43. поток-питон:очистить-код — nil → ""
+(тест "поток-питон:очистить-код nil"
+  (assert (string= (поток-питон:очистить-код nil) "")))
+
+;; 44. поток-питон:очистить-код — markdown
+(тест "поток-питон:очистить-код markdown"
+  (let ((код (поток-питон:очистить-код (format nil "```python~%print(1)~%```"))))
+    (assert (string= код "print(1)"))))
+
+;; 45. поток-питон:очистить-код — plain
+(тест "поток-питон:очистить-код plain"
+  (assert (string= (поток-питон:очистить-код "print(1)") "print(1)")))
+
 (format t "~%Итого ошибок: ~A~%" *тест-ошибки*)
 (when (plusp *тест-ошибки*) (sb-ext:exit :code 1))

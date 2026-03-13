@@ -7,8 +7,9 @@
 
 (defun загрузить-поток (путь)
   (let* ((имя (pathname-name путь))
-         (ok (not (null (ignore-errors (load путь :verbose nil :print nil))))))
-    (format t "[поток] ~A ~A~%" имя (if ok "OK" "FAIL"))
+         (ok (handler-case (progn (load путь :verbose nil :print nil) t)
+               (error (e) (log/error "поток" "~A: ~A" имя e) nil))))
+    (log/info "поток" "~A ~A" имя (if ok "OK" "FAIL"))
     (when ok
       (setf (gethash имя *активные-потоки*) t))
     ok))

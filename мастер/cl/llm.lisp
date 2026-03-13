@@ -32,7 +32,7 @@
              (msg   (cdr (assoc :message (first (cdr (assoc :choices json)))))))
         (or (cdr (assoc :content msg)) "[нет ответа]"))
     (error (e)
-      (format *error-output* "[llm] ~A~%" e)
+      (log/error "llm" "~A" e)
       "[ошибка LLM]")))
 
 (defvar *llm-fn* #'%llm-complete-real
