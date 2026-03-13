@@ -35,15 +35,14 @@
 (defun poll-loop (start-offset)
   (loop with offset = start-offset
         while *polling*
-        do (let* ((updates (ignore-errors (get-updates :offset offset :timeout 30)))
-                  (max-id  offset))
+        do (let ((updates (ignore-errors (get-updates :offset offset :timeout 30))))
              (dolist (upd (or updates '()))
+               (ignore-errors (обработать-update upd))
+               ;; ACK сразу после обработки — offset двигается по каждому апдейту
                (let ((id (cdr (assoc :update--id upd))))
-                 (when (and id (> id max-id)) (setf max-id id)))
-               (ignore-errors (обработать-update upd)))
-             (when (> max-id offset)
-               (setf offset (1+ max-id))
-               (%save-offset offset)))))
+                 (when id
+                   (setf offset (1+ id))
+                   (%save-offset offset)))))))
 
 (defun %chat-id-of (msg)
   (cdr (assoc :id (cdr (assoc :chat msg)))))
