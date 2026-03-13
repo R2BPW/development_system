@@ -121,4 +121,5 @@
         (if fn
             (handler-case (funcall fn chat-id args)
               (error (e) (format nil "Ошибка: ~A" e)))
-            (format nil "Неизвестная команда: ~A" cmd))))))
+            ;; Свободный текст — в диалог
+            (%обр-диалог chat-id (list t0)))))))

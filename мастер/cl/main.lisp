@@ -1,24 +1,35 @@
 (in-package #:мастер)
 
 (defvar *polling* t)
+(defparameter *offset-file* "/tmp/cl-master-offset.txt")
 
-(defun %drain-offset ()
-  "Слить всю очередь pending updates → следующий offset."
+(defun %load-offset ()
+  (handler-case
+      (with-open-file (f *offset-file*) (read f nil 0))
+    (error () 0)))
+
+(defun %save-offset (n)
+  (ignore-errors
+    (with-open-file (f *offset-file* :direction :output :if-exists :supersede)
+      (print n f))))
+
+(defun %drain-offset (saved)
+  "Слить всю очередь, начиная с сохранённого offset → следующий offset."
   (labels ((drain (off)
     (let ((upds (ignore-errors (get-updates :timeout 0 :offset off))))
-      (if (null upds)
-          off
+      (if (null upds) off
           (drain (1+ (reduce #'max upds
                              :key (lambda (u) (or (cdr (assoc :update--id u)) 0))
                              :initial-value (1- off))))))))
-    (drain 0)))
+    (drain saved)))
 
 (defun start ()
   (format t "[мастер] Загружаем потоки...~%")
   (ensure-directories-exist *каталог-истории*)
   (загрузить-все-потоки)
-  (let ((offset (%drain-offset)))
+  (let ((offset (%drain-offset (%load-offset))))
     (format t "[мастер] Запущен с offset=~A~%" offset)
+    (%save-offset offset)
     (poll-loop offset)))
 
 (defun poll-loop (start-offset)
@@ -31,14 +42,17 @@
                  (when (and id (> id max-id)) (setf max-id id)))
                (ignore-errors (обработать-update upd)))
              (when (> max-id offset)
-               (setf offset (1+ max-id))))))
+               (setf offset (1+ max-id))
+               (%save-offset offset)))))
 
 (defun %chat-id-of (msg)
   (cdr (assoc :id (cdr (assoc :chat msg)))))
 
 (defun %dispatch (chat-id text)
-  (let ((resp (обработать-команду chat-id text)))
-    (when (stringp resp) (send-message chat-id resp))))
+  "Разрешаем доступ только администратору."
+  (when (eql chat-id *admin-chat-id*)
+    (let ((resp (обработать-команду chat-id text)))
+      (when (stringp resp) (send-message chat-id resp)))))
 
 (defun обработать-update (upd)
   (cond
