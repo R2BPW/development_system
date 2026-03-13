@@ -45,7 +45,7 @@ OpenRouter key: env `OPENROUTER_API_KEY`. Модель LLM: `openai/gpt-4.1`.
 
 - [x] **[TELEGRAM]** Создать `мастер/cl/telegram.lisp`: функции `api-url`, `api-call`, `get-updates` (long-poll timeout 30s), `send-message` (text, optional reply-markup), `send-document`, `answer-callback-query`, `make-inline-keyboard`
 
-- [ ] **[LLM]** Создать `мастер/cl/llm.lisp`: функция `llm-complete (prompt &key model system messages)` → строка. POST к https://openrouter.ai/api/v1/chat/completions через dexador, парсинг cl-json
+- [x] **[LLM]** Создать `мастер/cl/llm.lisp`: функция `llm-complete (prompt &key model system messages)` → строка. POST к https://openrouter.ai/api/v1/chat/completions через dexador, парсинг cl-json
 
 - [ ] **[DUSHA]** Создать `мастер/cl/dusha.lisp`: `читать-душу (путь)` → plist, `писать-душу (душа путь)`, `душа->системный-промпт (душа)` → строка. Формат файла — read-able S-expression
 
