@@ -43,6 +43,21 @@
              '("drakma" "cl-json" "flexi-streams" "uiop")
              :silent t)))
 
+;;; --- загрузка трассировщика ---
+
+(defun обеспечить-трассировщик ()
+  "Загружает tracer.lisp рядом с исполнителем, если задан путь журнала."
+  (let* ((путь-трас (merge-pathnames "tracer.lisp"
+                                     (make-pathname
+                                      :defaults *load-pathname*
+                                      :name nil :type nil)))
+         (путь-журнала (uiop:getenv "TRACE_FILE")))
+    (when (and путь-журнала (probe-file путь-трас))
+      (load путь-трас :verbose nil :print nil)
+      (when (find-package :трас)
+        (setf (symbol-value (find-symbol "*ПУТЬ-ЖУРНАЛА*" :трас))
+              путь-журнала)))))
+
 ;;; --- загрузка потока ---
 
 (defun загрузить-поток (путь)
@@ -53,6 +68,7 @@
         (unless (probe-file путь)
           (error "Файл потока не найден: ~a" путь))
         (обеспечить-quicklisp)
+        (обеспечить-трассировщик)
         (load путь :verbose nil :print nil)
         t)
     (пропустить ()

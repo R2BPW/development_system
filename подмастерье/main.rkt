@@ -14,7 +14,8 @@
          racket/port
          racket/runtime-path
          racket/string
-         racket/system)
+         racket/system
+         racket/date)
 
 (provide запустить-подмастерье
          выполнить-в-sbcl
@@ -115,16 +116,29 @@
 (define (->string п)
   (if (path? п) (path->string п) п))
 
+(define (путь-журнала имя-пакета)
+  (let* ((д (seconds->date (current-seconds)))
+         (метка (format "~a~a~a-~a~a~a"
+                        (date-year д) (date-month д) (date-day д)
+                        (date-hour д) (date-minute д) (date-second д))))
+    (path->string
+     (build-path (каталог-образов) ".."
+                 (string-append имя-пакета "-" метка ".след")))))
+
 (define (выполнить-в-sbcl путь-потока имя-пакета задача)
-  (let* ((путь-sbcl (find-executable-path "sbcl"))
-         (исп (->string (путь-исполнителя)))
-         (загрузка (format "(load ~s :verbose nil :print nil)" исп))
-         (вызов (format "(let* ((ф (funcall (intern \"ЗАПУСК\" \"ИСПОЛНИТЕЛЬ\") ~s ~s ~s))) (princ ф) (finish-output) (sb-ext:exit :code 0))"
-                         (->string путь-потока)
-                         имя-пакета
-                         задача)))
+  (let* ((путь-sbcl  (find-executable-path "sbcl"))
+         (исп        (->string (путь-исполнителя)))
+         (путь-след  (путь-журнала имя-пакета))
+         (загрузка   (format "(load ~s :verbose nil :print nil)" исп))
+         (вызов      (format "(let* ((ф (funcall (intern \"ЗАПУСК\" \"ИСПОЛНИТЕЛЬ\") ~s ~s ~s))) (princ ф) (finish-output) (sb-ext:exit :code 0))"
+                             (->string путь-потока)
+                             имя-пакета
+                             задача)))
     (unless путь-sbcl
       (error 'выполнить-в-sbcl "Программа sbcl не найдена в PATH"))
+    (environment-variables-set! (current-environment-variables)
+                                #"TRACE_FILE"
+                                (string->bytes/utf-8 путь-след))
     (let-values ([(процесс выход вход ошибки)
                   (subprocess #f #f #f
                               путь-sbcl

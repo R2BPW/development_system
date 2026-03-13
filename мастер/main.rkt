@@ -4,16 +4,19 @@
 
 (require json
          net/url
+         racket/file
          racket/format
          racket/list
          racket/match
+         racket/path
          racket/port
          racket/runtime-path
          racket/string
          "dusha.rkt"
          "potoki.rkt"
          "kombinirovanie.rkt"
-         "llm.rkt")
+         "llm.rkt"
+         "report.rkt")
 
 (provide разобрать-обновления
          извлечь-события
@@ -130,6 +133,33 @@
   (послать-запрос "sendMessage"
                   (jsexpr->string (hash 'chat_id ид-чата 'text текст))))
 
+(define (послать-документ ид-чата путь подпись)
+  (let* ((данные  (file->bytes путь))
+         (имя-ф   (path->string (file-name-from-path путь)))
+         (граница "----RktBoundary7483920")
+         (тело    (bytes-append
+                   (string->bytes/utf-8
+                    (string-append
+                     "--" граница "\r\n"
+                     "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
+                     (number->string ид-чата) "\r\n"
+                     "--" граница "\r\n"
+                     "Content-Disposition: form-data; name=\"caption\"\r\n\r\n"
+                     подпись "\r\n"
+                     "--" граница "\r\n"
+                     "Content-Disposition: form-data; name=\"document\"; filename=\""
+                     имя-ф "\"\r\n"
+                     "Content-Type: application/pdf\r\n\r\n"))
+                   данные
+                   (string->bytes/utf-8
+                    (string-append "\r\n--" граница "--\r\n"))))
+         (адрес   (string->url (адрес-api "sendDocument")))
+         (заголовки (list (string-append
+                           "Content-Type: multipart/form-data; boundary="
+                           граница)))
+         (порт    (post-pure-port адрес тело заголовки)))
+    (begin0 (port->string порт) (close-input-port порт))))
+
 (define (послать-с-кнопками ид-чата текст)
   (послать-запрос "sendMessage"
                   (jsexpr->string
@@ -164,6 +194,7 @@
     [(or (string=? текст "💾 Память")       (string=? текст "/память"))    (обработать-память)]
     [(or (string=? текст "📋 Мои потоки")  (string=? текст "/потоки"))    (обработать-потоки)]
     [(or (string=? текст "⏹ Остановить")   (string=? текст "/остановить")) (обработать-остановить)]
+    [(string=? текст "/отчёт") (обработать-отчёт)]
     [(or (string=? текст "🔧 Породить поток")) #f]   ; ждать ввода
     [(string-prefix? текст "/породить ")
      (обработать-породить (substring текст 10))]
@@ -280,6 +311,15 @@
           (string-append (обработать-запустить имя)
                          (format "\nОписание: ~a" описание))))))
 
+(define (обработать-отчёт)
+  "Генерирует PDF из трасс и сообщает путь."
+  (with-handlers ([exn:fail?
+                   (lambda (e) (format "Ошибка отчёта: ~a" (exn-message e)))])
+    (let ((пдф (собрать-отчёт)))
+      (if пдф
+          (format "Отчёт готов: ~a" (path->string пдф))
+          "Нет данных трассировки. Запустите поток и выполните задачу."))))
+
 (define (формат-время)
   (let ((с (seconds->date (current-seconds))))
     (format "~a-~a-~a ~a:~a:~a"
@@ -323,6 +363,16 @@
                        (let ((р (обработать-породить текст)))
                          (displayln (format "> ~a" р))
                          (послать-с-кнопками ид-чата р))]
+                      [(string=? текст "/отчёт")
+                       (with-handlers ([exn:fail?
+                                        (lambda (e)
+                                          (послать-сообщение ид-чата
+                                            (format "Ошибка: ~a" (exn-message e))))])
+                         (let ((пдф (собрать-отчёт)))
+                           (if пдф
+                               (послать-документ ид-чата пдф "Журнал вычислений")
+                               (послать-сообщение ид-чата
+                                 "Нет данных трассировки."))))]
                       [else
                        (let ((р (сформировать-ответ текст)))
                          (displayln (format "> ~a" (or р "")))
