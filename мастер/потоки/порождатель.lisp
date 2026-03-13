@@ -15,11 +15,12 @@
   (or (sb-ext:posix-getenv "OPENROUTER_API_KEY")
       (error "OPENROUTER_API_KEY не задан")))
 
-(defun каталог-потоков ()
+;; Захватываем путь при загрузке файла — *load-truename* доступен только тогда
+(defparameter *каталог*
   (or (sb-ext:posix-getenv "STREAMS_DIR")
-      (namestring
-       (merge-pathnames "../мастер/потоки/"
-                        (uiop:pathname-directory-pathname *load-truename*)))))
+      (namestring (uiop:pathname-directory-pathname *load-truename*))))
+
+(defun каталог-потоков () *каталог*)
 
 (defparameter *модель* "openai/gpt-4.1")
 
