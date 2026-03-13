@@ -38,6 +38,11 @@ case "$SUITE" in
       "racket '$ТЕСТЫ/unit.rkt'"
     ;;&
 
+  generation|all)
+    run_suite "Тесты генерации потока (mock LLM)" \
+      "racket '$ТЕСТЫ/generation.rkt'"
+    ;;&
+
   streams|all)
     run_suite "Тесты потоков (SBCL)" \
       "bash '$ТЕСТЫ/streams.sh'"
