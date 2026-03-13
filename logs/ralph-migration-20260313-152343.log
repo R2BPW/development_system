@@ -1,0 +1,2 @@
+[ralph] project=./ executor=openai/gpt-4.1
+[ralph] ════ Loop 1 ════ task=[ASDF]

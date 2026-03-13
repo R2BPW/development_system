@@ -1,0 +1,5 @@
+[ralph] project=./ executor=openai/gpt-4.1
+[ralph] ════ Loop 1 ════ task=[ASDF]
+[ralph] condition: NETWORK-ERROR (logged to condition-0001.txt)
+[ralph] executor error: Network error: User not found.
+[ralph] ✗ [ASDF] executor did not complete (failed-iterations=1)

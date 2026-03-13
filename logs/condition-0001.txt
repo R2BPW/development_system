@@ -1,0 +1,10 @@
+Condition: Network error: User not found.
+Type: NETWORK-ERROR
+Task: ASDF
+Loop: 1
+
+Available restarts:
+  Ignore runtime option --eval "(ralph-commonlisp:main (list \"--project\" \".\" \"--executor-model\" \"openai/gpt-4.1\" \"--max-loops\" \"30\" \"--delay-ms\" \"300\" \"--allow-shell\" ))".
+  Skip rest of --eval and --load options.
+  Skip to toplevel READ/EVAL/PRINT loop.
+  Exit SBCL (calling #'EXIT, killing the process).

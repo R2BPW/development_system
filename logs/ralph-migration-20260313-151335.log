@@ -1,0 +1,18 @@
+[ralph] project=./ executor=anthropic/claude-sonnet-4-5
+
+debugger invoked on a SIMPLE-ERROR in thread
+#<THREAD "main thread" RUNNING {10048D01B3}>:
+  Malformed task line in fix_plan.md: "- [ ] Задача 1: мастер.asd + packages.lisp"
+
+Type HELP for debugger help, or (SB-EXT:EXIT) to exit from SBCL.
+
+restarts (invokable by number or by possibly-abbreviated name):
+  0: [CONTINUE] Ignore runtime option --eval "(ralph-commonlisp:main (list \"--project\" \".\" \"--executor-model\" \"anthropic/claude-sonnet-4-5\" \"--max-loops\" \"30\" \"--delay-ms\" \"300\" \"--allow-shell\" ))".
+  1: [ABORT   ] Skip rest of --eval and --load options.
+  2:            Skip to toplevel READ/EVAL/PRINT loop.
+  3: [EXIT    ] Exit SBCL (calling #'EXIT, killing the process).
+
+(RALPH-COMMONLISP::%PARSE-TASK-LINE "- [ ] Задача 1: мастер.asd + packages.lisp")
+   source: (ERROR "Malformed task line in fix_plan.md: ~S" LINE)
+0] 
+* 
