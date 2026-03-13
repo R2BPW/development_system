@@ -331,11 +331,28 @@
 
 ;; --- цикл опроса ---
 
+(define *файл-сдвига* "/tmp/master-offset.txt")
+
+(define (сохранить-сдвиг n)
+  (call-with-output-file *файл-сдвига*
+    (lambda (p) (fprintf p "~a" n))
+    #:exists 'replace))
+
+(define (загрузить-сдвиг)
+  (if (file-exists? *файл-сдвига*)
+      (or (string->number (string-trim (file->string *файл-сдвига*))) 0)
+      0))
+
 (define (запустить-опрос)
   (загрузить-душу)
   (displayln "Мастер запущен. Ожидаю сообщения...")
-  (let цикл ((сдвиг 0))
-    (with-handlers ([exn:fail?
+  (let цикл ((сдвиг (загрузить-сдвиг)))
+    (with-handlers ([exn:break?
+                     (lambda (e)
+                       (displayln "Прерван (break), продолжаю...")
+                       (sleep 2)
+                       (цикл сдвиг))]
+                    [exn:fail?
                      (lambda (e)
                        (displayln (format "Ошибка: ~a" (exn-message e)))
                        (sleep 5)
@@ -344,7 +361,8 @@
              (события  (извлечь-события (разобрать-обновления ответ))))
         (let обр ((ост события) (макс сдвиг))
           (if (null? ост)
-              (цикл макс)
+              (begin (when (> макс сдвиг) (сохранить-сдвиг макс))
+                     (цикл макс))
               (let* ((событие (car ост))
                      (ид-обн  (first событие))
                      (ид-чата (second событие))

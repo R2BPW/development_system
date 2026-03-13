@@ -62,7 +62,8 @@
      "- В начале файла после defpackage/in-package добавь: (ql:quickload '(\"drakma\" \"cl-json\" \"flexi-streams\") :silent t)\n"
      "- Для HTTP используй ТОЛЬКО drakma:http-request, никакого dexador/dex\n"
      "- Для JSON используй ТОЛЬКО cl-json: cl-json:encode-json-to-string, cl-json:decode-json-from-string\n"
-     "- Для getenv используй ТОЛЬКО sb-ext:posix-getenv (НЕ uiop:getenv — пакет uiop может не существовать в момент чтения файла)\n"
+     "- Для getenv: sb-ext:posix-getenv (НЕ uiop:getenv)\n"
+     "- Для запуска подпроцессов: uiop:run-program — он всегда доступен в среде исполнения\n"
      "- Переменная окружения: OPENROUTER_API_KEY\n"
      "- Создай пакет с именем :поток-<имя> где <имя> — краткое слово\n"
      "- Обязательная функция (defun выполнить (задача) ...) — точка входа\n"
@@ -90,12 +91,9 @@
              (string-trim ответ)
              (string-join (reverse собрано) "\n"))]
         [(and (not внутри)
-              (let ((с (string-trim (car ост))))
-                (or (string-prefix? с "```lisp")
-                    (string-prefix? с "```common-lisp")
-                    (string-prefix? с "```cl"))))
-         (ищи (cdr ост) #t собрано)]
-        [(and внутри (string-prefix? (string-trim (car ост)) "```"))
+              (string-prefix? "```" (string-trim (car ост))))
+         (ищи (cdr ост) #t собрано)]   ; любой ```-блок
+        [(and внутри (string-prefix? "```" (string-trim (car ост))))
          (ищи (cdr ост) #f собрано)]
         [внутри
          (ищи (cdr ост) #t (cons (car ост) собрано))]
@@ -150,7 +148,8 @@
          (ql-init (path->string
                    (build-path (find-system-path 'home-dir) "quicklisp" "setup.lisp")))
          (загрузить-ql (format "(when (probe-file ~s) (load ~s :verbose nil :print nil))" ql-init ql-init))
-         (загрузить-зависимости "(when (find-package :ql) (funcall (intern \"QUICKLOAD\" :ql) '(\"drakma\" \"cl-json\" \"flexi-streams\" \"uiop\") :silent t))")
+         (требовать-uiop "(require :uiop)")
+         (загрузить-зависимости "(when (find-package :ql) (funcall (intern \"QUICKLOAD\" :ql) '(\"drakma\" \"cl-json\" \"flexi-streams\") :silent t))")
          (выражение
           (format "(multiple-value-bind (fasl warn fail) (compile-file ~s) (if fail (sb-ext:exit :code 1) (sb-ext:exit :code 0)))"
                   (path->string путь))))
@@ -161,6 +160,7 @@
                               путь-sbcl
                               "--noinform" "--non-interactive"
                               "--eval" загрузить-ql
+                              "--eval" требовать-uiop
                               "--eval" загрузить-зависимости
                               "--eval" выражение)])
       (close-output-port вход)

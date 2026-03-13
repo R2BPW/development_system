@@ -231,11 +231,28 @@
 
 ;; --- цикл опроса ---
 
+(define *файл-сдвига-п* "/tmp/apprentice-offset.txt")
+
+(define (сохранить-сдвиг-п n)
+  (call-with-output-file *файл-сдвига-п*
+    (lambda (p) (fprintf p "~a" n))
+    #:exists 'replace))
+
+(define (загрузить-сдвиг-п)
+  (if (file-exists? *файл-сдвига-п*)
+      (or (string->number (string-trim (file->string *файл-сдвига-п*))) 0)
+      0))
+
 (define (запустить-подмастерье)
   (displayln "Подмастерье запущен. Ожидаю задачи...")
   (загрузить-активный-поток)
-  (let цикл ((сдвиг 0))
-    (with-handlers ([exn:fail?
+  (let цикл ((сдвиг (загрузить-сдвиг-п)))
+    (with-handlers ([exn:break?
+                     (lambda (e)
+                       (displayln "Прерван (break), продолжаю...")
+                       (sleep 2)
+                       (цикл сдвиг))]
+                    [exn:fail?
                      (lambda (e)
                        (displayln (format "Ошибка: ~a" (exn-message e)))
                        (sleep 5)
@@ -245,7 +262,8 @@
              (сообщения (извлечь-сообщения-п обновления)))
         (let обр ((ост сообщения) (макс-сдвиг сдвиг))
           (if (null? ост)
-              (цикл макс-сдвиг)
+              (begin (when (> макс-сдвиг сдвиг) (сохранить-сдвиг-п макс-сдвиг))
+                     (цикл макс-сдвиг))
               (let* ((сообщ (car ост))
                      (ид-обн (first сообщ))
                      (ид-чата (second сообщ))

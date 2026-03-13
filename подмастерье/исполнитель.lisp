@@ -68,6 +68,7 @@
         (unless (probe-file путь)
           (error "Файл потока не найден: ~a" путь))
         (обеспечить-quicklisp)
+        (require :uiop)   ; uiop:run-program доступен в потоках
         (обеспечить-трассировщик)
         (load путь :verbose nil :print nil)
         t)
