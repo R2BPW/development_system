@@ -27,9 +27,8 @@
          (тело (jsexpr->bytes
                 (hash 'model м
                       'temperature теплота
-                      'messages (list->vector
-                                 (cons (hash 'role "system" 'content указание)
-                                       сообщения)))))
+                      'messages (cons (hash 'role "system" 'content указание)
+                                      сообщения))))
          (заголовки (list (string-append "Authorization: Bearer " (ключ-openrouter))
                           "Content-Type: application/json"))
          (порт (post-pure-port (string->url api-url) тело заголовки))
