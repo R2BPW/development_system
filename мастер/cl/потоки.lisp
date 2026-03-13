@@ -3,30 +3,28 @@
 (defparameter *активные-потоки* (make-hash-table :test #'equal))
 
 (defun список-потоков ()
-  "Имена потоков (строки, без .lisp) из каталога потоков."
-  (mapcar (lambda (p) (pathname-name p))
-          (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
+  (mapcar #'pathname-name (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
 
 (defun загрузить-поток (путь)
-  "Загружает .lisp-файл потока. Возвращает t/nil."
-  (not (null (ignore-errors (load путь)))))
+  (not (null (ignore-errors (load путь :verbose nil :print nil)))))
 
 (defun загрузить-все-потоки ()
-  (dolist (p (directory (merge-pathnames "*.lisp" *каталог-потоков*)))
-    (загрузить-поток p)))
+  (mapc #'загрузить-поток (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
+
+(defun %pkg-name (имя)
+  "поток-эхо → ПОТОК-ЭХО"
+  (string-upcase (concatenate 'string "поток-" имя)))
 
 (defun %найти-выполнить (имя)
-  "Ищет функцию ВЫПОЛНИТЬ в пакете потока."
-  (let ((pkg (find-package (string-upcase имя))))
-    (when pkg
-      (let ((sym (find-symbol "ВЫПОЛНИТЬ" pkg)))
-        (when (and sym (fboundp sym)) (symbol-function sym))))))
+  (let* ((pkg (find-package (%pkg-name имя)))
+         (sym (when pkg (find-symbol "ВЫПОЛНИТЬ" pkg))))
+    (when (and sym (fboundp sym)) (symbol-function sym))))
 
 (defun запустить-поток (имя задача)
-  "Запустить поток ИМЯ с задачей ЗАДАЧА. Возвращает строку-результат."
-  (let* ((путь (merge-pathnames (format nil "~A.lisp" имя) *каталог-потоков*)))
+  "Загружает (один раз) и вызывает поток ИМЯ с ЗАДАЧЕЙ."
+  (let ((путь (merge-pathnames (format nil "~A.lisp" имя) *каталог-потоков*)))
     (when (probe-file путь)
-      (загрузить-поток путь)
+      (unless (find-package (%pkg-name имя)) (загрузить-поток путь))
       (let ((fn (%найти-выполнить имя)))
         (when fn
           (setf (gethash имя *активные-потоки*) t)
