@@ -44,8 +44,18 @@
 
 ;;; --- инструменты ---
 
+(defun %safe-eval (expr)
+  "Рекурсивно вычисляет выражение, допуская только числа и +,-,*,/."
+  (cond
+    ((numberp expr) expr)
+    ((and (listp expr)
+          (member (first expr) '(+ - * /))
+          (rest expr))
+     (apply (first expr) (mapcar #'%safe-eval (rest expr))))
+    (t (error "Недопустимое выражение: ~A" expr))))
+
 (defun калькулятор (выражение)
-  "Вычисляет арифметическое выражение."
+  "Вычисляет арифметическое выражение (только числа и +-*/)."
   (handler-case
       (let* ((очищено (remove-if (lambda (c)
                                    (not (member c '(#\0 #\1 #\2 #\3 #\4 #\5
@@ -53,7 +63,7 @@
                                                     #\- #\* #\/ #\( #\) #\space))))
                                  выражение))
              (*read-eval* nil)
-             (результат (eval (read-from-string очищено))))
+             (результат (%safe-eval (read-from-string очищено))))
         (format nil "~a" результат))
     (error ()
       (format nil "Ошибка: не удалось вычислить ~s" выражение))))
@@ -92,7 +102,8 @@
                  *api-url*
                  :content тело
                  :headers `(("Content-Type" . "application/json")
-                            ("Authorization" . ,(format nil "Bearer ~a" ключ)))))
+                            ("Authorization" . ,(format nil "Bearer ~a" ключ)))
+                 :read-timeout 60 :connect-timeout 30))
          (текст (if (stringp сырой) сырой
                     (sb-ext:octets-to-string сырой :external-format :utf-8)))
          (json (cl-json:decode-json-from-string текст))

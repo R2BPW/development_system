@@ -26,7 +26,8 @@
              (сырой (dexador:post "https://openrouter.ai/api/v1/chat/completions"
                        :content тело
                        :headers `(("Content-Type" . "application/json")
-                                  ("Authorization" . ,(format nil "Bearer ~a" (%ключ))))))
+                                  ("Authorization" . ,(format nil "Bearer ~a" (%ключ))))
+                       :read-timeout 60 :connect-timeout 30))
              (json  (cl-json:decode-json-from-string
                      (if (stringp сырой) сырой
                          (sb-ext:octets-to-string сырой :external-format :utf-8)))))

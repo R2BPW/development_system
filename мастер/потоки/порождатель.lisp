@@ -43,7 +43,8 @@
          (raw  (dexador:post "https://openrouter.ai/api/v1/chat/completions"
                              :headers `(("Authorization" . ,(concatenate 'string "Bearer " (ключ-апи)))
                                         ("Content-Type"  . "application/json"))
-                             :content тело))
+                             :content тело
+                             :read-timeout 60 :connect-timeout 30))
          (str  (if (stringp raw) raw (sb-ext:octets-to-string raw :external-format :utf-8)))
          (resp (cl-json:decode-json-from-string str)))
     (or (cdr (assoc :content (cdr (assoc :message (first (cdr (assoc :choices resp))))))) "")))

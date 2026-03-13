@@ -34,7 +34,8 @@
                  "https://openrouter.ai/api/v1/chat/completions"
                  :content (тело-запроса задача модель)
                  :headers `(("Content-Type" . "application/json")
-                            ("Authorization" . ,(format nil "Bearer ~A" (ключ-апи)))))))
+                            ("Authorization" . ,(format nil "Bearer ~A" (ключ-апи))))
+                 :read-timeout 60 :connect-timeout 30)))
     (if (stringp сырой) сырой
         (sb-ext:octets-to-string сырой :external-format :utf-8))))
 
