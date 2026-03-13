@@ -3,7 +3,7 @@
 
 (in-package #:мастер)
 
-(defvar *интеграция-ошибки* 0)
+(defparameter *интеграция-ошибки* 0)
 
 (defmacro итест (имя &body тело)
   `(handler-case

@@ -6,7 +6,7 @@
 
 (in-package #:мастер)
 
-(defvar *тест-ошибки* 0)
+(defparameter *тест-ошибки* 0)
 
 (defmacro тест (имя &body тело)
   `(handler-case
