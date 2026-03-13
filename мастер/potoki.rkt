@@ -91,9 +91,9 @@
              (string-trim ответ)
              (string-join (reverse собрано) "\n"))]
         [(and (not внутри)
-              (string-prefix? "```" (string-trim (car ост))))
+              (string-prefix? (string-trim (car ост)) "```"))
          (ищи (cdr ост) #t собрано)]   ; любой ```-блок
-        [(and внутри (string-prefix? "```" (string-trim (car ост))))
+        [(and внутри (string-prefix? (string-trim (car ост)) "```"))
          (ищи (cdr ост) #f собрано)]
         [внутри
          (ищи (cdr ост) #t (cons (car ост) собрано))]

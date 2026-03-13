@@ -60,16 +60,11 @@
 
 (defun исполнить-python (код)
   (handler-case
-      (let* ((вр (make-string-output-stream))
-             (ош (make-string-output-stream))
-             (проц (run-program "python3" (list "-c" код)
-                                :search t
-                                :output вр
-                                :error ош
-                                :wait t))
-             (вывод    (get-output-stream-string вр))
-             (ошибки   (get-output-stream-string ош))
-             (код-вых  (process-exit-code проц)))
+      (multiple-value-bind (вывод ошибки код-вых)
+          (uiop:run-program (list "python3" "-c" код)
+                            :output :string
+                            :error-output :string
+                            :ignore-error-status t)
         (declare (ignore код-вых))
         (if (string/= ошибки "")
             (format nil "Ошибка Python: ~a" ошибки)

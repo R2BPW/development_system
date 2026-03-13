@@ -22,7 +22,7 @@
 
 (defun тело-запроса (задача)
   (cl-json:encode-json-to-string
-   `((:model . "google/gemini-2.5-flash-preview")
+   `((:model . "openai/gpt-4.1")
      (:messages . ,(собрать-сообщения задача)))))
 
 (defun запросить-модель (задача)
