@@ -4,6 +4,7 @@
 
 (require rackunit
          racket/file
+         racket/list
          racket/path
          racket/string
          racket/system
@@ -105,6 +106,90 @@
     (let ((путь (записать-поток кат "плохой" "(defun незакрытая-скобка")))
       (let-values ([(успех? вывод) (проверить-поток путь)])
         (check-false успех?)))
+    (delete-directory/files кат)))
+
+;; --- тесты чтения метаданных ---
+
+(test-case "прочитать-мету: существующий файл"
+  (let ((кат (make-temporary-file "мета-~a" 'directory)))
+    (let ((путь (записать-мета кат "тест" "Тестовый поток")))
+      (let ((мета (прочитать-мету путь)))
+        (check-true (list? мета))
+        (check-equal? (поле-меты мета 'имя) "тест")
+        (check-equal? (поле-меты мета 'описание) "Тестовый поток")))
+    (delete-directory/files кат)))
+
+(test-case "прочитать-мету: несуществующий файл"
+  (check-false (прочитать-мету "/tmp/нет-такого-файла.мета")))
+
+(test-case "поле-меты: состояние"
+  (let ((кат (make-temporary-file "мета-~a" 'directory)))
+    (let* ((путь (записать-мета кат "тест" "описание"))
+           (мета (прочитать-мету путь)))
+      (check-equal? (поле-меты мета 'состояние) ':готов))
+    (delete-directory/files кат)))
+
+;; --- тесты списка потоков ---
+
+(test-case "список-потоков: пустой каталог"
+  (let ((кат (make-temporary-file "потоки-~a" 'directory)))
+    (check-equal? (список-потоков кат) '())
+    (delete-directory/files кат)))
+
+(test-case "список-потоков: несуществующий каталог"
+  (check-equal? (список-потоков "/tmp/нет-каталога-12345") '()))
+
+(test-case "список-потоков: каталог с потоками"
+  (let ((кат (make-temporary-file "потоки-~a" 'directory)))
+    (записать-поток кат "альфа" тест-код)
+    (записать-мета кат "альфа" "Первый поток")
+    (записать-поток кат "бета" тест-код)
+    (записать-мета кат "бета" "Второй поток")
+    (let ((потоки (список-потоков кат)))
+      (check-equal? (length потоки) 2)
+      (check-not-false (member "альфа" (map first потоки)))
+      (check-not-false (member "бета" (map first потоки))))
+    (delete-directory/files кат)))
+
+;; --- тесты поиска потока ---
+
+(test-case "найти-поток: существующий"
+  (let ((кат (make-temporary-file "потоки-~a" 'directory)))
+    (записать-поток кат "гамма" тест-код)
+    (записать-мета кат "гамма" "Третий")
+    (let ((результат (найти-поток кат "гамма")))
+      (check-true (list? результат))
+      (check-true (file-exists? (first результат))))
+    (delete-directory/files кат)))
+
+(test-case "найти-поток: несуществующий"
+  (let ((кат (make-temporary-file "потоки-~a" 'directory)))
+    (check-false (найти-поток кат "нет-такого"))
+    (delete-directory/files кат)))
+
+;; --- тесты активного потока ---
+
+(test-case "записать-активный/прочитать-активный: цикл"
+  (let ((кат (make-temporary-file "потоки-~a" 'directory)))
+    (записать-поток кат "дельта" тест-код)
+    (записать-активный кат "дельта" "поток-дельта")
+    (let ((актив (прочитать-активный кат)))
+      (check-true (list? актив))
+      (check-equal? (first актив) "дельта")
+      (check-equal? (third актив) "поток-дельта"))
+    (delete-directory/files кат)))
+
+(test-case "прочитать-активный: нет файла"
+  (let ((кат (make-temporary-file "потоки-~a" 'directory)))
+    (check-false (прочитать-активный кат))
+    (delete-directory/files кат)))
+
+(test-case "удалить-активный: удаляет файл"
+  (let ((кат (make-temporary-file "потоки-~a" 'directory)))
+    (записать-активный кат "эпсилон" "поток-эпсилон")
+    (check-true (list? (прочитать-активный кат)))
+    (удалить-активный кат)
+    (check-false (прочитать-активный кат))
     (delete-directory/files кат)))
 
 (displayln "Все тесты потоков пройдены.")
