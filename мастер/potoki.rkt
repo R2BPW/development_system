@@ -59,6 +59,10 @@
      "Девиз: " девиз "\n\n"
      "Задача: " описание "\n\n"
      "Требования к коду:\n"
+     "- В начале файла после defpackage/in-package добавь: (ql:quickload '(\"drakma\" \"cl-json\" \"flexi-streams\") :silent t)\n"
+     "- Для HTTP используй ТОЛЬКО drakma:http-request, никакого dexador/dex\n"
+     "- Для JSON используй ТОЛЬКО cl-json: cl-json:encode-json-to-string, cl-json:decode-json-from-string\n"
+     "- Для getenv используй ТОЛЬКО uiop:getenv (uiop входит в ql:quickload выше)\n"
      "- Создай пакет с именем :поток-<имя> где <имя> — краткое слово\n"
      "- Обязательная функция (defun выполнить (задача) ...) — точка входа\n"
      "- Рекурсия вместо loop, функции до 15 строк\n"
@@ -93,7 +97,7 @@
 ;; --- имя пакета из кода ---
 
 (define (имя-пакета код)
-  (let ((совп (regexp-match #rx":поток-([^ )\r\n]+)" код)))
+  (let ((совп (regexp-match #px":поток-([^\\s()]+)" код)))
     (if совп
         (string-trim (cadr совп))
         "безымянный")))

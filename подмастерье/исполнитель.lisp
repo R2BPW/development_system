@@ -29,6 +29,20 @@
 (defun текущий-поток-пакет () *текущий-поток-пакет*)
 (defun текущий-поток-функция () *текущий-поток-функция*)
 
+;;; --- инициализация Quicklisp ---
+
+(defun обеспечить-quicklisp ()
+  "Загружает Quicklisp если ещё не загружен."
+  (unless (find-package :ql)
+    (let ((ql-init (merge-pathnames "quicklisp/setup.lisp"
+                                    (user-homedir-pathname))))
+      (when (probe-file ql-init)
+        (load ql-init :verbose nil :print nil))))
+  (when (find-package :ql)
+    (funcall (intern "QUICKLOAD" :ql)
+             '("drakma" "cl-json" "flexi-streams" "uiop")
+             :silent t)))
+
 ;;; --- загрузка потока ---
 
 (defun загрузить-поток (путь)
@@ -38,6 +52,7 @@
       (progn
         (unless (probe-file путь)
           (error "Файл потока не найден: ~a" путь))
+        (обеспечить-quicklisp)
         (load путь :verbose nil :print nil)
         t)
     (пропустить ()
