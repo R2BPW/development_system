@@ -102,9 +102,13 @@
     ("💬 Диалог"          . "/диалог")
     ("🔄 Сбросить"        . "/сбросить")))
 
+(defun %кнопка->команда (text)
+  "Матч по prefix — устойчив к вариантам emoji-селекторов."
+  (cdr (find-if (lambda (p) (uiop:string-prefix-p (car p) text)) *кнопки*)))
+
 (defun обработать-команду (chat-id text)
-  (let* ((t0  (string-trim '(#\Space #\Newline) text))
-         (t1  (or (cdr (assoc t0 *кнопки* :test #'string=)) t0)))
+  (let* ((t0 (string-trim '(#\Space #\Newline #\Return) text))
+         (t1 (or (%кнопка->команда t0) t0)))
     (multiple-value-bind (cmd args) (%cmd-args t1)
       (let ((fn (cdr (assoc cmd *команды* :test #'string=))))
         (if fn

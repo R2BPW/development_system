@@ -2,12 +2,22 @@
 
 (defvar *polling* t)
 
+(defun %drain-offset ()
+  "Получить текущий максимальный update_id чтобы не переигрывать старые."
+  (let ((updates (ignore-errors (get-updates :timeout 0))))
+    (if updates
+        (1+ (reduce #'max updates
+                    :key (lambda (u) (or (cdr (assoc :update--id u)) 0))
+                    :initial-value 0))
+        0)))
+
 (defun start ()
   (format t "[мастер] Загружаем потоки...~%")
   (ensure-directories-exist *каталог-истории*)
   (загрузить-все-потоки)
-  (format t "[мастер] Запущен. Ожидаю сообщения...~%")
-  (poll-loop 0))
+  (let ((offset (%drain-offset)))
+    (format t "[мастер] Запущен с offset=~A~%" offset)
+    (poll-loop offset)))
 
 (defun poll-loop (start-offset)
   (loop with offset = start-offset
