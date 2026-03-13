@@ -19,11 +19,10 @@
      ("Диалог"         "Сбросить"))))
 
 (defun %обр-старт (chat-id args)
-  (declare (ignore args))
+  (declare (ignore chat-id args))
   (let* ((д     (ignore-errors (читать-душу *путь-души*)))
-         (текст (or (and д (getf д :описание)) "Мастер готов.")))
-    (send-message chat-id текст :reply-markup *главное-меню*)
-    nil))
+         (текст (or (and д (%душа-значение д 'указание)) "Мастер готов.")))
+    (values текст *главное-меню*)))
 
 (defun %обр-потоки (chat-id args)
   (declare (ignore chat-id args))

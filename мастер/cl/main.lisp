@@ -48,10 +48,12 @@
   (cdr (assoc :id (cdr (assoc :chat msg)))))
 
 (defun %dispatch (chat-id text)
-  "Разрешаем доступ только администратору."
+  "Разрешаем доступ только администратору.
+   Обработчики возвращают (values строка &optional reply-markup)."
   (when (eql chat-id *admin-chat-id*)
-    (let ((resp (обработать-команду chat-id text)))
-      (when (stringp resp) (send-message chat-id resp)))))
+    (multiple-value-bind (текст markup) (обработать-команду chat-id text)
+      (when (stringp текст)
+        (send-message chat-id текст :reply-markup markup)))))
 
 (defun обработать-update (upd)
   (cond
