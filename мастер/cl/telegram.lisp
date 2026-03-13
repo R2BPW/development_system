@@ -8,10 +8,12 @@
 (defun api-post (method payload)
   "POST JSON к Telegram API → alist или nil."
   (handler-case
-      (cl-json:decode-json-from-string
-       (dexador:post (api-url method)
-                     :content (cl-json:encode-json-to-string payload)
-                     :headers '(("Content-Type" . "application/json"))))
+      (let* ((bytes (dexador:post (api-url method)
+                                  :content (cl-json:encode-json-to-string payload)
+                                  :headers '(("Content-Type" . "application/json"))
+                                  :force-binary t))
+             (str   (sb-ext:octets-to-string bytes :external-format :utf-8)))
+        (cl-json:decode-json-from-string str))
     (error (e)
       (format *error-output* "[tg] ~A: ~A~%" method e)
       nil)))
@@ -33,10 +35,10 @@
 (defun send-document (chat-id path &key caption)
   (handler-case
       (cl-json:decode-json-from-string
-       (dexador:post (api-url "sendDocument")
-                     :multipart `(("chat_id" . ,(princ-to-string chat-id))
-                                  ("document" . ,path)
-                                  ,@(when caption `(("caption" . ,caption))))))
+       (%utf8 (dexador:post (api-url "sendDocument")
+                            :multipart `(("chat_id" . ,(princ-to-string chat-id))
+                                         ("document" . ,path)
+                                         ,@(when caption `(("caption" . ,caption)))))))
     (error (e)
       (format *error-output* "[tg] sendDocument: ~A~%" e)
       nil)))
@@ -45,5 +47,7 @@
   "rows: ((text . callback-data) ...) список списков."
   `((:inline--keyboard
      . ,(mapcar (lambda (row)
-                  (mapcar (lambda (b) `((:text . ,(car b)) (:callback--data . ,(cdr b)))) row))
+                  (mapcar (lambda (b)
+                            `((:text . ,(car b)) (:callback--data . ,(cdr b))))
+                          row))
                 rows))))

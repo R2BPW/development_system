@@ -40,11 +40,15 @@
      (let* ((msg  (cdr (assoc :message upd)))
             (text (cdr (assoc :text msg))))
        (when (stringp text)
+         (format *error-output* "[msg] ~S~%" text)
          (send-message (%chat-id-of msg)
                        (обработать-команду (%chat-id-of msg) text)))))
     ((assoc :callback--query upd)
      (let* ((cb   (cdr (assoc :callback--query upd)))
             (cid  (%chat-id-of (cdr (assoc :message cb))))
             (data (cdr (assoc :data cb))))
+       (format *error-output* "[cb] data=~S hex=~A~%"
+               data
+               (map 'list (lambda (c) (format nil "~X" (char-code c))) data))
        (answer-callback-query (cdr (assoc :id cb)))
        (send-message cid (обработать-команду cid data))))))
