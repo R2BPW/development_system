@@ -9,7 +9,7 @@
 
 (in-package :поток-реакт)
 
-(ql:quickload '("drakma" "cl-json" "flexi-streams") :silent t)
+(ql:quickload '("dexador" "cl-json") :silent t)
 
 ;;; --- константы ---
 
@@ -27,6 +27,20 @@
 Для вычислений: Действие: калькулятор / Вход: <выражение>
 Для финального ответа: Действие: ответ / Вход: <текст ответа>
 Всегда начинай с Мысль:")
+
+;;; --- URL-кодирование ---
+
+(defun %url-encode (строка)
+  "Простое percent-кодирование для UTF-8 строки."
+  (with-output-to-string (out)
+    (loop for октет across (sb-ext:string-to-octets строка :external-format :utf-8)
+          do (if (or (<= (char-code #\A) октет (char-code #\Z))
+                     (<= (char-code #\a) октет (char-code #\z))
+                     (<= (char-code #\0) октет (char-code #\9))
+                     (member октет (list (char-code #\-) (char-code #\_)
+                                         (char-code #\.) (char-code #\~))))
+                 (write-char (code-char октет) out)
+                 (format out "%~2,'0X" октет)))))
 
 ;;; --- инструменты ---
 
@@ -46,17 +60,15 @@
 (defun поиск (запрос)
   "Поиск через DuckDuckGo Instant Answer API."
   (restart-case
-      (let* ((кодировка (drakma:url-encode запрос :utf-8))
+      (let* ((кодировка (%url-encode запрос))
              (url (format nil
                           "https://api.duckduckgo.com/?q=~a&format=json&no_html=1&skip_disambig=1"
                           кодировка))
-             (тело (drakma:http-request url
-                                        :accept "application/json"
-                                        :external-format-in :utf-8
-                                        :external-format-out :utf-8))
+             (сырой (dexador:get url
+                                 :headers '(("Accept" . "application/json"))))
              (json (cl-json:decode-json-from-string
-                    (if (stringp тело) тело
-                        (flexi-streams:octets-to-string тело :external-format :utf-8))))
+                    (if (stringp сырой) сырой
+                        (sb-ext:octets-to-string сырой :external-format :utf-8))))
              (абстракт (cdr (assoc :abstract json)))
              (ответ-dd (cdr (assoc :answer json))))
         (cond
@@ -75,17 +87,13 @@
          (тело (cl-json:encode-json-to-string
                 `((:model    . ,*модель*)
                   (:messages . ,сообщения))))
-         (байты (flexi-streams:string-to-octets тело :external-format :utf-8))
-         (ответ-тело (drakma:http-request
-                      *api-url*
-                      :method :post
-                      :content байты
-                      :content-type "application/json"
-                      :additional-headers `(("Authorization" . ,(format nil "Bearer ~a" ключ)))
-                      :external-format-in  :utf-8
-                      :external-format-out :utf-8))
-         (текст (if (stringp ответ-тело) ответ-тело
-                    (flexi-streams:octets-to-string ответ-тело :external-format :utf-8)))
+         (сырой (dexador:post
+                 *api-url*
+                 :content тело
+                 :headers `(("Content-Type" . "application/json")
+                            ("Authorization" . ,(format nil "Bearer ~a" ключ)))))
+         (текст (if (stringp сырой) сырой
+                    (sb-ext:octets-to-string сырой :external-format :utf-8)))
          (json (cl-json:decode-json-from-string текст))
          (варианты (cdr (assoc :choices json)))
          (первый   (and варианты (car варианты)))

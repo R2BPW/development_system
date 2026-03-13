@@ -269,5 +269,54 @@
 (тест "*макс-история* по умолчанию 20"
   (assert (= *макс-история* 20)))
 
+;; ── Фаза 5: юзабилити ─────────────────────────────────────────────────────
+
+;; 33. /запустить без аргументов → inline-клавиатура
+(тест "/запустить без аргументов → inline-keyboard"
+  (multiple-value-bind (текст markup) (%обр-запустить 0 nil)
+    (assert (stringp текст))
+    (assert (search "Выберите" текст))
+    (assert markup)
+    (assert (assoc :inline--keyboard markup))))
+
+;; 34. /запустить с одним аргументом → "Использование:"
+(тест "/запустить с одним аргументом → Использование"
+  (let ((resp (%обр-запустить 0 '("эхо"))))
+    (assert (stringp resp))
+    (assert (search "Использование:" resp))))
+
+;; 35. %dispatch с чужим chat-id → "Доступ запрещён"
+(тест "%dispatch чужой chat-id → Доступ запрещён"
+  (let ((отправлено nil))
+    (с-моками (:api-post (lambda (method payload)
+                            (when (string= method "sendMessage")
+                              (setf отправлено payload))
+                            '((:ok . t))))
+      (let ((*admin-chat-id* 42))
+        (%dispatch 999 "/потоки")
+        (assert (not (null отправлено)))
+        (let ((текст (cdr (assoc :text отправлено))))
+          (assert (search "Доступ запрещён" текст)))))))
+
+;; 36. %dispatch с admin chat-id → нормальный ответ (не "Доступ запрещён")
+(тест "%dispatch admin chat-id → нормальный ответ"
+  (let ((отправлено nil))
+    (с-моками (:api-post (lambda (method payload)
+                            (when (string= method "sendMessage")
+                              (setf отправлено payload))
+                            '((:ok . t))))
+      (let ((*admin-chat-id* 42))
+        (%dispatch 42 "/потоки")
+        (assert (not (null отправлено)))
+        (let ((текст (cdr (assoc :text отправлено))))
+          (assert (null (search "Доступ запрещён" текст))))))))
+
+;; 37. обработать-команду кнопка "Запустить" → inline-keyboard
+(тест "кнопка Запустить → inline-keyboard"
+  (multiple-value-bind (текст markup) (обработать-команду 0 "Запустить")
+    (assert (stringp текст))
+    (assert markup)
+    (assert (assoc :inline--keyboard markup))))
+
 (format t "~%Итого ошибок: ~A~%" *тест-ошибки*)
 (when (plusp *тест-ошибки*) (sb-ext:exit :code 1))

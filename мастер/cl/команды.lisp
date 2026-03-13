@@ -31,11 +31,22 @@
 
 (defun %обр-запустить (chat-id args)
   (declare (ignore chat-id))
-  (if (< (length args) 2)
-      "Использование: /запустить <поток> <задача>"
-      (or (запустить-поток (first args)
-                           (format nil "~{~A~^ ~}" (rest args)))
-          (format nil "Ошибка: поток ~A не найден." (first args)))))
+  (cond
+    ((null args)
+     (let ((потоки (список-потоков)))
+       (if потоки
+           (values "Выберите поток:"
+                   (make-inline-keyboard
+                    (mapcar (lambda (имя)
+                              (list (cons имя (format nil "/запустить ~A" имя))))
+                            потоки)))
+           "Нет доступных потоков.")))
+    ((< (length args) 2)
+     "Использование: /запустить <поток> <задача>")
+    (t
+     (or (запустить-поток (first args)
+                          (format nil "~{~A~^ ~}" (rest args)))
+         (format nil "Ошибка: поток ~A не найден." (first args))))))
 
 (defun %обр-остановить (chat-id args)
   (declare (ignore chat-id args))

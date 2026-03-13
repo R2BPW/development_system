@@ -7,7 +7,7 @@
 
 (in-package :поток-исполнитель)
 
-(ql:quickload '("drakma" "cl-json" "flexi-streams") :silent t)
+(ql:quickload '("dexador" "cl-json") :silent t)
 
 ;;; --- запрос к модели ---
 
@@ -23,16 +23,13 @@
                              (cons :content "Верни ТОЛЬКО код Python без пояснений и markdown."))
                       ,(list (cons :role "user")
                              (cons :content (format nil "~A" задача))))))))
-         (ответ (drakma:http-request
+         (сырой (dexador:post
                  "https://openrouter.ai/api/v1/chat/completions"
-                 :method :post
-                 :content-type "application/json"
-                 :additional-headers `(("Authorization" . ,(format nil "Bearer ~A" (ключ-api))))
-                 :content (flexi-streams:string-to-octets тело :external-format :utf-8)
-                 :external-format-in  :utf-8
-                 :external-format-out :utf-8))
-         (текст (if (stringp ответ) ответ
-                    (flexi-streams:octets-to-string ответ :external-format :utf-8)))
+                 :content тело
+                 :headers `(("Content-Type" . "application/json")
+                            ("Authorization" . ,(format nil "Bearer ~A" (ключ-api))))))
+         (текст (if (stringp сырой) сырой
+                    (sb-ext:octets-to-string сырой :external-format :utf-8)))
          (json  (cl-json:decode-json-from-string текст))
          (выбор (car (cdr (assoc :choices json))))
          (сообщ (cdr (assoc :message выбор))))

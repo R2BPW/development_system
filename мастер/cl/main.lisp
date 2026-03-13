@@ -50,10 +50,11 @@
 (defun %dispatch (chat-id text)
   "Разрешаем доступ только администратору.
    Обработчики возвращают (values строка &optional reply-markup)."
-  (when (eql chat-id *admin-chat-id*)
-    (multiple-value-bind (текст markup) (обработать-команду chat-id text)
-      (when (stringp текст)
-        (send-message chat-id текст :reply-markup markup)))))
+  (if (eql chat-id *admin-chat-id*)
+      (multiple-value-bind (текст markup) (обработать-команду chat-id text)
+        (when (stringp текст)
+          (send-message chat-id текст :reply-markup markup)))
+      (send-message chat-id "Доступ запрещён.")))
 
 (defun обработать-update (upd)
   (cond

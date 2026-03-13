@@ -5,7 +5,7 @@
 (defpackage :поток-уточнение (:use :cl) (:export #:выполнить))
 (in-package :поток-уточнение)
 
-(ql:quickload '("drakma" "cl-json" "flexi-streams") :silent t)
+(ql:quickload '("dexador" "cl-json") :silent t)
 
 (defun %ключ ()
   (or (sb-ext:posix-getenv "OPENROUTER_API_KEY") (error "нет OPENROUTER_API_KEY")))
@@ -23,13 +23,13 @@
       (let* ((тело  (cl-json:encode-json-to-string
                      `((:model . "google/gemini-2.0-flash-001")
                        (:messages . ,(coerce история 'vector)))))
-             (сырой (drakma:http-request "https://openrouter.ai/api/v1/chat/completions"
-                       :method :post :content-type "application/json"
-                       :additional-headers `(("Authorization" . ,(format nil "Bearer ~a" (%ключ))))
-                       :content тело))
+             (сырой (dexador:post "https://openrouter.ai/api/v1/chat/completions"
+                       :content тело
+                       :headers `(("Content-Type" . "application/json")
+                                  ("Authorization" . ,(format nil "Bearer ~a" (%ключ))))))
              (json  (cl-json:decode-json-from-string
                      (if (stringp сырой) сырой
-                         (flexi-streams:octets-to-string сырой :external-format :utf-8)))))
+                         (sb-ext:octets-to-string сырой :external-format :utf-8)))))
         (cdr (assoc :content (cdr (assoc :message (first (cdr (assoc :choices json))))))))
     (error () "")))
 

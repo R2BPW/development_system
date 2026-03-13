@@ -8,7 +8,7 @@
 
 (in-package :поток-питон)
 
-(ql:quickload '("drakma" "cl-json" "flexi-streams") :silent t)
+(ql:quickload '("dexador" "cl-json") :silent t)
 
 (defun ключ-апи ()
   (or (sb-ext:posix-getenv "OPENROUTER_API_KEY")
@@ -26,17 +26,13 @@
      (:messages . ,(собрать-сообщения задача)))))
 
 (defun запросить-модель (задача)
-  (let ((ответ (drakma:http-request
-                "https://openrouter.ai/api/v1/chat/completions"
-                :method :post
-                :content-type "application/json"
-                :additional-headers
-                `(("Authorization" . ,(format nil "Bearer ~A" (ключ-апи))))
-                :content (тело-запроса задача)
-                :want-stream nil)))
-    (if (typep ответ '(vector (unsigned-byte 8)))
-        (flexi-streams:octets-to-string ответ :external-format :utf-8)
-        ответ)))
+  (let* ((сырой (dexador:post
+                 "https://openrouter.ai/api/v1/chat/completions"
+                 :content (тело-запроса задача)
+                 :headers `(("Content-Type" . "application/json")
+                            ("Authorization" . ,(format nil "Bearer ~A" (ключ-апи)))))))
+    (if (stringp сырой) сырой
+        (sb-ext:octets-to-string сырой :external-format :utf-8))))
 
 (defun извлечь-код (ответ-json)
   (let* ((разбор (cl-json:decode-json-from-string ответ-json))
