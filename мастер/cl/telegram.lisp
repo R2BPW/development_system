@@ -24,10 +24,17 @@
          (resp (api-post "getUpdates" params)))
     (when resp (cdr (assoc :result resp)))))
 
-(defun send-message (chat-id text &key reply-markup)
+(defun send-message (chat-id text &key reply-markup (retries 2))
   (let ((payload (append `((:chat--id . ,chat-id) (:text . ,text))
                          (when reply-markup `((:reply--markup . ,reply-markup))))))
-    (api-post "sendMessage" payload)))
+    (handler-case
+        (api-post "sendMessage" payload)
+      (error (e)
+        (when (plusp retries)
+          (sleep 5)
+          (send-message chat-id text
+                        :reply-markup reply-markup
+                        :retries (1- retries)))))))
 
 (defun send-document (chat-id filepath &key caption)
   "Отправить файл через multipart (упрощённо через content-file)."

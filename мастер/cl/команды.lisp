@@ -102,10 +102,24 @@
         (cons "/диалог"     #'%обр-диалог)
         (cons "/сбросить"   #'%обр-сбросить)))
 
+(defparameter *кнопки->команды*
+  '(("🔧 Породить поток"  . "/породить")
+    ("▶️ Запустить"        . "/запустить")
+    ("⏹ Остановить"       . "/остановить")
+    ("📋 Потоки"           . "/потоки")
+    ("📊 Состояние"        . "/состояние")
+    ("💬 Диалог"           . "/диалог")
+    ("🔄 Сбросить"         . "/сбросить")))
+
+(defun %нормализовать (text)
+  "Превращает текст кнопки в команду если нужно."
+  (or (cdr (assoc text *кнопки->команды* :test #'string=)) text))
+
 (defun обработать-команду (chat-id text)
-  (multiple-value-bind (cmd args) (%cmd-args text)
-    (let ((fn (cdr (assoc cmd *команды* :test #'string=))))
-      (if fn
-          (handler-case (funcall fn chat-id args)
-            (error (e) (format nil "Ошибка: ~A" e)))
-          (format nil "Неизвестная команда: ~A" cmd)))))
+  (let* ((нормальный (%нормализовать (string-trim '(#\Space #\Newline) text))))
+    (multiple-value-bind (cmd args) (%cmd-args нормальный)
+      (let ((fn (cdr (assoc cmd *команды* :test #'string=))))
+        (if fn
+            (handler-case (funcall fn chat-id args)
+              (error (e) (format nil "Ошибка: ~A" e)))
+            (format nil "Неизвестная команда: ~A" cmd))))))

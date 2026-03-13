@@ -10,20 +10,18 @@
   (format t "[мастер] Запущен. Ожидаю сообщения...~%")
   (poll-loop 0))
 
-(defun poll-loop (offset)
-  (when *polling*
-    (handler-case
-        (let* ((updates (get-updates :offset offset :timeout 30))
-               (max-id offset))
-          (dolist (upd (or updates '()))
-            (let ((id (cdr (assoc :update--id upd))))
-              (when (and id (> id max-id)) (setf max-id id)))
-            (ignore-errors (обработать-update upd)))
-          (poll-loop (if (> max-id offset) (1+ max-id) offset)))
-      (error (e)
-        (format *error-output* "[мастер] ошибка в poll-loop: ~A~%" e)
-        (sleep 2)
-        (poll-loop offset)))))
+(defun poll-loop (start-offset)
+  (loop with offset = start-offset
+        while *polling*
+        do (let* ((updates (ignore-errors
+                             (get-updates :offset offset :timeout 30)))
+                  (max-id offset))
+             (dolist (upd (or updates '()))
+               (let ((id (cdr (assoc :update--id upd))))
+                 (when (and id (> id max-id)) (setf max-id id)))
+               (ignore-errors (обработать-update upd)))
+             (when (> max-id offset)
+               (setf offset (1+ max-id))))))
 
 (defun обработать-update (update)
   (cond
