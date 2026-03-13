@@ -2,8 +2,15 @@
 ;;; Тесты для исполнителя — загрузка потока, поиск точки входа, выполнение,
 ;;; повтор при ошибке, сохранение/восстановление образа
 
-(load (merge-pathnames "подмастерье/исполнитель.lisp"
-                       (make-pathname :directory '(:absolute "home" "tema" "development_system"))))
+(defvar *корень-проекта*
+  (make-pathname :directory (pathname-directory
+                             (merge-pathnames
+                              (make-pathname :directory '(:relative :up))
+                              (or *load-pathname*
+                                  (make-pathname :directory '(:absolute "home" "tema" "development_system"
+                                                              "подмастерье")))))))
+
+(load (merge-pathnames "подмастерье/исполнитель.lisp" *корень-проекта*))
 
 (defpackage :тесты
   (:use :cl :исполнитель))
@@ -11,16 +18,13 @@
 (in-package :тесты)
 
 (defvar *путь-потока*
-  (merge-pathnames "мастер/потоки/эхо.lisp"
-                   (make-pathname :directory '(:absolute "home" "tema" "development_system"))))
+  (merge-pathnames "мастер/потоки/эхо.lisp" cl-user::*корень-проекта*))
 
 (defvar *путь-нет*
-  (merge-pathnames "мастер/потоки/несуществует.lisp"
-                   (make-pathname :directory '(:absolute "home" "tema" "development_system"))))
+  (merge-pathnames "мастер/потоки/несуществует.lisp" cl-user::*корень-проекта*))
 
 (defvar *каталог-образов*
-  (merge-pathnames "мастер/образы/"
-                   (make-pathname :directory '(:absolute "home" "tema" "development_system"))))
+  (merge-pathnames "мастер/образы/" cl-user::*корень-проекта*))
 
 (defvar *число-тестов* 0)
 (defvar *число-успехов* 0)

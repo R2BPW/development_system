@@ -117,8 +117,8 @@
           (for/list ([п (in-list пары-условие-имя-путь)])
             (let ((условие (first п))
                   (пакет (format "поток-~a" (second п))))
-              (format "((search ~s задача)\n       (funcall (symbol-function (find-symbol \"ВЫПОЛНИТЬ\" (find-package (string-upcase ~s)))) задача))"
-                      условие пакет)))
+              (format "((search ~s (string-downcase задача))\n       (funcall (symbol-function (find-symbol \"ВЫПОЛНИТЬ\" (find-package (string-upcase ~s)))) задача))"
+                      (string-downcase условие) пакет)))
           "\n      ")))
     (string-append
      ";;; -*- Mode: Lisp; Syntax: Common-Lisp -*-\n"
@@ -183,7 +183,8 @@
                          "Потоков нет."
                          (string-join
                           (for/list ([п (in-list потоки)])
-                            (format "- ~a: ~a" (first п) (second п)))
+                            (let ((путь (build-path каталог (string-append (first п) ".lisp"))))
+                              (format "- ~a: ~a (файл: ~a)" (first п) (second п) (path->string путь))))
                           "\n")))
          (задание
           (string-append

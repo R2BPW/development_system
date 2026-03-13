@@ -30,19 +30,22 @@
 ;; --- вызов Claude Code ---
 
 (define (спросить-клод вопрос)
-  (let-values ([(процесс выход вход ошибки)
-                (subprocess #f #f #f
-                            (find-executable-path "claude")
-                            "--print" вопрос)])
-    (close-output-port вход)
-    (let ((ответ (port->string выход)))
-      (close-input-port выход)
-      (close-input-port ошибки)
-      (subprocess-wait процесс)
-      (let ((код (subprocess-status процесс)))
-        (if (zero? код)
-            ответ
-            (error 'спросить-клод "Claude Code завершился с кодом ~a" код))))))
+  (let ((путь-клод (find-executable-path "claude")))
+    (unless путь-клод
+      (error 'спросить-клод "Программа claude не найдена в PATH"))
+    (let-values ([(процесс выход вход ошибки)
+                  (subprocess #f #f #f
+                              путь-клод
+                              "--print" вопрос)])
+      (close-output-port вход)
+      (let ((ответ (port->string выход)))
+        (close-input-port выход)
+        (close-input-port ошибки)
+        (subprocess-wait процесс)
+        (let ((код (subprocess-status процесс)))
+          (if (zero? код)
+              ответ
+              (error 'спросить-клод "Claude Code завершился с кодом ~a" код)))))))
 
 ;; --- формирование задания ---
 
@@ -131,12 +134,15 @@
 ;; --- проверка потока в SBCL ---
 
 (define (проверить-поток путь)
-  (let* ((выражение
+  (let* ((путь-sbcl (find-executable-path "sbcl"))
+         (выражение
           (format "(multiple-value-bind (fasl warn fail) (compile-file ~s) (if fail (sb-ext:exit :code 1) (sb-ext:exit :code 0)))"
                   (path->string путь))))
+    (unless путь-sbcl
+      (error 'проверить-поток "Программа sbcl не найдена в PATH"))
     (let-values ([(процесс выход вход ошибки)
                   (subprocess #f #f #f
-                              (find-executable-path "sbcl")
+                              путь-sbcl
                               "--noinform" "--non-interactive"
                               "--eval" выражение)])
       (close-output-port вход)

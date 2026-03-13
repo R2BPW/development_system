@@ -102,41 +102,44 @@
 ;; --- выполнение задачи в SBCL ---
 
 (define (выполнить-в-sbcl путь-потока имя-пакета задача)
-  (let* ((исп (path->string (путь-исполнителя)))
+  (let* ((путь-sbcl (find-executable-path "sbcl"))
+         (исп (path->string (путь-исполнителя)))
          (загрузка (format "(load ~s :verbose nil :print nil)" исп))
          (вызов (format "(let* ((ф (funcall (intern \"ЗАПУСК\" \"ИСПОЛНИТЕЛЬ\") ~s ~s ~s))) (princ ф) (finish-output) (sb-ext:exit :code 0))"
                          (path->string путь-потока)
                          имя-пакета
                          задача)))
-    (выполнить-sbcl-два-шага загрузка вызов)))
-
-(define (выполнить-sbcl-два-шага загрузка вызов)
-  (let-values ([(процесс выход вход ошибки)
-                (subprocess #f #f #f
-                            (find-executable-path "sbcl")
-                            "--noinform" "--non-interactive"
-                            "--eval" загрузка
-                            "--eval" вызов)])
-    (close-output-port вход)
-    (let ((вывод (port->string выход))
-          (ош (port->string ошибки)))
-      (close-input-port выход)
-      (close-input-port ошибки)
-      (subprocess-wait процесс)
-      (let ((код (subprocess-status процесс)))
-        (if (zero? код)
-            (string-trim вывод)
-            (format "Ошибка SBCL (код ~a): ~a" код (string-trim ош)))))))
+    (unless путь-sbcl
+      (error 'выполнить-в-sbcl "Программа sbcl не найдена в PATH"))
+    (let-values ([(процесс выход вход ошибки)
+                  (subprocess #f #f #f
+                              путь-sbcl
+                              "--noinform" "--non-interactive"
+                              "--eval" загрузка
+                              "--eval" вызов)])
+      (close-output-port вход)
+      (let ((вывод (port->string выход))
+            (ош (port->string ошибки)))
+        (close-input-port выход)
+        (close-input-port ошибки)
+        (subprocess-wait процесс)
+        (let ((код (subprocess-status процесс)))
+          (if (zero? код)
+              (string-trim вывод)
+              (format "Ошибка SBCL (код ~a): ~a" код (string-trim ош))))))))
 
 ;; --- восстановление из образа ---
 
 (define (восстановить-из-образа путь-образа задача)
-  (let ((выражение
-         (format "(progn (let ((р (исполнитель:выполнить-из-образа ~s))) (princ р) (finish-output) (sb-ext:exit :code 0)))"
-                 задача)))
+  (let* ((путь-sbcl (find-executable-path "sbcl"))
+         (выражение
+          (format "(progn (let ((р (исполнитель:выполнить-из-образа ~s))) (princ р) (finish-output) (sb-ext:exit :code 0)))"
+                  задача)))
+    (unless путь-sbcl
+      (error 'восстановить-из-образа "Программа sbcl не найдена в PATH"))
     (let-values ([(процесс выход вход ошибки)
                   (subprocess #f #f #f
-                              (find-executable-path "sbcl")
+                              путь-sbcl
                               "--noinform" "--non-interactive"
                               "--core" (path->string путь-образа)
                               "--eval" выражение)])
