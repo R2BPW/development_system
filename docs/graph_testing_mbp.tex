@@ -1,0 +1,1669 @@
+% ╔══════════════════════════════════════════════════════════════════╗
+% ║  Графовое тестирование: автогенерация тестов из описания системы ║
+% ║  Компилировать: xelatex graph_testing_research.tex               ║
+% ╚══════════════════════════════════════════════════════════════════╝
+
+\documentclass[10pt, oneside]{article}
+
+% ─── Шрифты и язык ───────────────────────────────────────────────
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setotherlanguage{english}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+\setmonofont[Scale=0.85]{DejaVu Sans Mono}
+
+% ─── Геометрия страницы ──────────────────────────────────────────
+\usepackage[
+  paperwidth=185mm,
+  paperheight=118mm,
+  top=7mm,
+  bottom=7mm,
+  left=9mm,
+  right=9mm,
+  headheight=0pt,
+  headsep=0pt,
+  footskip=4mm
+]{geometry}
+
+% ─── Базовые пакеты ──────────────────────────────────────────────
+\usepackage[protrusion=false,expansion=false]{microtype}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% ─── TikZ для графов ─────────────────────────────────────────────
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, shadows.blur, calc, shapes.geometric, automata}
+
+% ─── Цвета ───────────────────────────────────────────────────────
+\usepackage[dvipsnames, svgnames, x11names]{xcolor}
+\definecolor{AccentBlue}{RGB}{25, 90, 160}
+\definecolor{AccentTeal}{RGB}{0, 120, 120}
+\definecolor{AccentOrange}{RGB}{200, 80, 0}
+\definecolor{LightGray}{RGB}{248, 248, 250}
+\definecolor{MidGray}{RGB}{130, 130, 140}
+\definecolor{DarkGray}{RGB}{40, 40, 50}
+\definecolor{CodeBg}{RGB}{245, 246, 250}
+\definecolor{CodeBorder}{RGB}{200, 205, 220}
+\definecolor{RuleColor}{RGB}{25, 90, 160}
+\definecolor{LinkColor}{RGB}{10, 80, 160}
+\definecolor{GreenOk}{RGB}{30, 140, 60}
+\definecolor{StateInit}{RGB}{70, 130, 180}
+\definecolor{StateTarget}{RGB}{34, 139, 34}
+\definecolor{StateForbid}{RGB}{178, 34, 34}
+\definecolor{StateNormal}{RGB}{100, 100, 120}
+
+% ─── Гиперссылки ─────────────────────────────────────────────────
+\usepackage[
+  unicode,
+  colorlinks=true,
+  linkcolor=LinkColor,
+  urlcolor=AccentTeal,
+  citecolor=AccentOrange,
+  pdftitle={Графовое тестирование: автогенерация тестов из описания системы},
+  pdfauthor={Opus Research},
+  pdfsubject={development\_system :: Model-Based Testing :: Common Lisp},
+  pdfkeywords={Common Lisp, MBT, property-based testing, граф состояний, автотесты}
+]{hyperref}
+
+% ─── Код (listings) ──────────────────────────────────────────────
+\usepackage{listings}
+
+\lstset{
+  basicstyle=\fontsize{7}{8.5}\ttfamily\color{DarkGray},
+  backgroundcolor=\color{CodeBg},
+  frame=single,
+  framerule=0.6pt,
+  rulecolor=\color{CodeBorder},
+  breaklines=true,
+  breakatwhitespace=false,
+  showspaces=false,
+  showstringspaces=false,
+  showtabs=false,
+  tabsize=2,
+  captionpos=b,
+  numbers=left,
+  numberstyle=\tiny\color{MidGray},
+  numbersep=8pt,
+  xleftmargin=14pt,
+  xrightmargin=4pt,
+  aboveskip=10pt,
+  belowskip=6pt,
+  escapeinside={(*@}{@*)},
+  literate=
+    {а}{{\cyra}}1  {б}{{\cyrb}}1  {в}{{\cyrv}}1  {г}{{\cyrg}}1
+    {д}{{\cyrd}}1  {е}{{\cyre}}1  {ё}{{\cyryo}}1 {ж}{{\cyrzh}}1
+    {з}{{\cyrz}}1  {и}{{\cyri}}1  {й}{{\cyrishrt}}1 {к}{{\cyrk}}1
+    {л}{{\cyrl}}1  {м}{{\cyrm}}1  {н}{{\cyrn}}1  {о}{{\cyro}}1
+    {п}{{\cyrp}}1  {р}{{\cyrr}}1  {с}{{\cyrs}}1  {т}{{\cyrt}}1
+    {у}{{\cyru}}1  {ф}{{\cyrf}}1  {х}{{\cyrh}}1  {ц}{{\cyrc}}1
+    {ч}{{\cyrch}}1 {ш}{{\cyrsh}}1 {щ}{{\cyrshch}}1 {ъ}{{\cyrhrdsn}}1
+    {ы}{{\cyrery}}1 {ь}{{\cyrsftsn}}1 {э}{{\cyrerev}}1 {ю}{{\cyryu}}1
+    {я}{{\cyrya}}1
+    {А}{{\CYRA}}1  {Б}{{\CYRB}}1  {В}{{\CYRV}}1  {Г}{{\CYRG}}1
+    {Д}{{\CYRD}}1  {Е}{{\CYRE}}1  {Ё}{{\CYRYO}}1 {Ж}{{\CYRZH}}1
+    {З}{{\CYRZ}}1  {И}{{\CYRI}}1  {Й}{{\CYRISHRT}}1 {К}{{\CYRK}}1
+    {Л}{{\CYRL}}1  {М}{{\CYRM}}1  {Н}{{\CYRN}}1  {О}{{\CYRO}}1
+    {П}{{\CYRP}}1  {Р}{{\CYRR}}1  {С}{{\CYRS}}1  {Т}{{\CYRT}}1
+    {У}{{\CYRU}}1  {Ф}{{\CYRF}}1  {Х}{{\CYRH}}1  {Ц}{{\CYRC}}1
+    {Ч}{{\CYRCH}}1 {Ш}{{\CYRSH}}1 {Щ}{{\CYRSHCH}}1 {Ъ}{{\CYRHRDSN}}1
+    {Ы}{{\CYRERY}}1 {Ь}{{\CYRSFTSN}}1 {Э}{{\CYREREV}}1 {Ю}{{\CYRYU}}1
+    {Я}{{\CYRYA}}1,
+}
+
+\lstdefinelanguage{CommonLisp}{
+  morekeywords={defun,defpackage,defparameter,defmacro,defstruct,let,let*,cond,when,unless,
+                if,and,or,not,progn,dolist,mapcar,mapcan,reduce,sort,
+                case,format,in-package,use,export,import,load,compile-file,
+                handler-case,error,return-from,values,multiple-value-bind,
+                setf,push,pop,car,cdr,caar,cdar,cons,list,append,remove-if,
+                remove-if-not,find,find-if,count-if,subseq,length,first,last,
+                second,third,loop,do,dotimes,with-open-file,ensure-directories-exist,
+                assert,check-type,the,declare,type,ftype,lambda,funcall,apply,
+                gethash,make-hash-table,maphash,remhash,hash-table-count,
+                defgeneric,defmethod,defclass,make-instance,slot-value,with-slots,
+                for-all,is,signals,finishes,test,def-suite,in-suite,run},
+  morestring=[b]",
+  morecomment=[l]{;;},
+  sensitive=false,
+  keywordstyle=\color{AccentBlue}\bfseries,
+  commentstyle=\color{MidGray}\itshape,
+  stringstyle=\color{AccentOrange},
+}
+
+\lstdefinelanguage{JSON}{
+  morestring=[b]",
+  morestring=[d]',
+  stringstyle=\color{AccentOrange},
+  literate=
+    *{0}{{{\color{AccentBlue}0}}}{1}
+     {1}{{{\color{AccentBlue}1}}}{1}
+     {2}{{{\color{AccentBlue}2}}}{1}
+     {3}{{{\color{AccentBlue}3}}}{1}
+     {4}{{{\color{AccentBlue}4}}}{1}
+     {5}{{{\color{AccentBlue}5}}}{1}
+     {6}{{{\color{AccentBlue}6}}}{1}
+     {7}{{{\color{AccentBlue}7}}}{1}
+     {8}{{{\color{AccentBlue}8}}}{1}
+     {9}{{{\color{AccentBlue}9}}}{1}
+     {:}{{{\color{DarkGray}{:}}}}{1}
+     {,}{{{\color{DarkGray}{,}}}}{1}
+     {\{}{{{\color{AccentBlue}{\{}}}}{1}
+     {\}}{{{\color{AccentBlue}{\}}}}}{1}
+     {[}{{{\color{AccentTeal}[}}}{1}
+     {]}{{{\color{AccentTeal}]}}}{1},
+}
+
+% ─── Колонтитулы ─────────────────────────────────────────────────
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[C]{\fontsize{7}{8}\selectfont\color{MidGray}\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ─── Заголовки разделов ──────────────────────────────────────────
+\usepackage{titlesec}
+\titleformat{\section}
+  {\normalsize\bfseries\color{AccentBlue}}
+  {\thesection.}{0.8em}{}
+  [\vspace{2pt}\color{RuleColor}\rule{\linewidth}{0.6pt}\vspace{4pt}]
+
+\titleformat{\subsection}
+  {\small\bfseries\color{DarkGray}}
+  {\thesubsection.}{0.7em}{}
+
+\titleformat{\subsubsection}
+  {\small\bfseries\color{AccentTeal}}
+  {\thesubsubsection.}{0.6em}{}
+
+\titlespacing*{\section}{0pt}{9pt}{4pt}
+\titlespacing*{\subsection}{0pt}{6pt}{2pt}
+\titlespacing*{\subsubsection}{0pt}{4pt}{1pt}
+
+% ─── tcolorbox для callout-блоков ────────────────────────────────
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable, skins}
+
+\newtcolorbox{infobox}[1][]{
+  colback=LightGray,
+  colframe=AccentBlue,
+  colbacktitle=AccentBlue,
+  coltitle=white,
+  fonttitle=\small\bfseries,
+  boxrule=0.6pt,
+  arc=3pt,
+  breakable,
+  #1
+}
+
+\newtcolorbox{warningbox}[1][]{
+  colback=Ivory,
+  colframe=AccentOrange,
+  colbacktitle=AccentOrange,
+  coltitle=white,
+  fonttitle=\small\bfseries,
+  boxrule=0.6pt,
+  arc=3pt,
+  breakable,
+  #1
+}
+
+\newtcolorbox{successbox}[1][]{
+  colback=Honeydew,
+  colframe=GreenOk,
+  colbacktitle=GreenOk,
+  coltitle=white,
+  fonttitle=\small\bfseries,
+  boxrule=0.6pt,
+  arc=3pt,
+  breakable,
+  #1
+}
+
+% ─── Таблицы ─────────────────────────────────────────────────────
+\usepackage{tabularx}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+\renewcommand{\arraystretch}{1.35}
+
+% ─── Заголовок документа ─────────────────────────────────────────
+\usepackage{titling}
+
+% ─── Прочее ──────────────────────────────────────────────────────
+\usepackage{soul}
+\usepackage{csquotes}
+\usepackage{footmisc}
+\setlength{\parskip}{2pt}
+\setlength{\parindent}{0pt}
+\setstretch{1.15}
+
+% ═══════════════════════════════════════════════════════════════════
+\begin{document}
+
+% ─── Титульная страница ──────────────────────────────────────────
+\begin{titlepage}
+  \color{DarkGray}
+
+  \vspace*{3mm}
+
+  {\color{AccentBlue}\rule{\textwidth}{1.2pt}}
+  \vspace{3mm}
+
+  {\sffamily\fontsize{6.5}{8}\color{MidGray} ТЕХНИЧЕСКОЕ ИССЛЕДОВАНИЕ}\\[3mm]
+
+  {\sffamily\fontsize{11}{14}\bfseries\color{AccentBlue}
+    Графовое тестирование:\\[2pt]
+    автогенерация тестов из описания системы
+  }\\[2mm]
+  {\sffamily\fontsize{8.5}{10}\color{DarkGray}\texttt{development\_system}}
+
+  \vspace{4mm}
+  {\color{AccentBlue}\rule{\textwidth}{0.4pt}}
+  \vspace{4mm}
+
+  {\fontsize{7.5}{10}\itshape\color{DarkGray}
+    Человек описывает систему как граф (текст, JSON, Lisp-DSL),
+    поток \textbf{граф-тестировщик} порождает тест-кейсы:
+    для целевых состояний~--- достижимость,
+    для нежелательных~--- исключения.
+  }
+
+  \vspace{12mm}
+
+  \vspace{3mm}
+  \begin{tabular}{@{}ll@{}}
+    {\fontsize{6.5}{7.5}\color{MidGray}Версия:} & {\fontsize{6.5}{7.5} 1.0 · 14 марта 2026} \\[1pt]
+    {\fontsize{6.5}{7.5}\color{MidGray}Стек:}   & {\fontsize{6.5}{7.5} Common Lisp, SBCL, OpenRouter} \\
+  \end{tabular}
+
+  \vfill
+
+  % Нижняя линия + ключевые слова
+  {\color{AccentBlue}\rule{\textwidth}{0.4pt}}
+  \vspace{4mm}
+  {\small\color{MidGray}
+    \textbf{Ключевые слова:}
+    Common Lisp,\enspace Model-Based Testing,\enspace Property-Based Testing,\enspace
+    Граф состояний,\enspace Reachability,\enspace TLA+,\enspace Fiveam,\enspace
+    Метациркулярность,\enspace Автогенерация тестов
+  }
+
+  
+\end{titlepage}
+
+% ─── Оглавление ──────────────────────────────────────────────────
+{\fontsize{8}{10}\selectfont\tableofcontents}
+\newpage
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Введение}
+
+\subsection{Постановка задачи}
+
+Артемий формулирует задачу:
+
+\begin{quote}
+\itshape
+<<Просмотреть граф как система сейчас реализована (описанный человеком) и
+реализовать на основе графа автотесты по системе: входные данные такие-то,
+целевое состояние должно быть таким-то, оно должно быть достижимо,
+а нежелательные состояния должны выбрасывать исключения.>>
+\end{quote}
+
+\textbf{Суть задачи} в трёх шагах:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Человек описывает систему как \textbf{граф состояний/переходов}
+        (текстом, схемой, или формально)
+  \item Система автоматически \textbf{порождает тесты} вида:
+  \begin{itemize}
+    \item <<При входе $X$ $\to$ целевое состояние $Y$ \textbf{достижимо}>>
+    \item <<При входе $X'$ $\to$ должно выброситься исключение (нежелательное состояние)>>
+  \end{itemize}
+  \item Тесты \textbf{запускаются} и проверяют реальную систему
+\end{enumerate}
+
+\subsection{Контекст системы \texttt{development\_system}}
+
+\texttt{development\_system} --- метациркулярная среда вычислительных потоков:
+
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  \textbf{Компонент} & \textbf{Роль} \\
+  \midrule
+  Telegram         & Входная точка: пользователь отправляет команды \\
+  Мастер (SBCL)    & Polling loop, маршрутизация команд, хранение истории \\
+  \texttt{команды.lisp} & Обработчики команд (\texttt{/запустить}, \texttt{/обучить}, ...) \\
+  \texttt{потоки.lisp}  & Загрузка и запуск потоков через reflection \\
+  \texttt{мастер/потоки/*.lisp} & Каждый поток: один пакет, одна функция \texttt{выполнить} \\
+  Порождатель      & Метапоток: по описанию генерирует новый поток через LLM \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Ключевые потоки:}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \texttt{эхо} --- возвращает входную задачу (для отладки)
+  \item \texttt{уточнение} --- уточняет задачу через LLM
+  \item \texttt{исполнитель} --- выполняет задачу через LLM
+  \item \texttt{питон} --- LLM генерирует Python-код, запускает, возвращает вывод
+  \item \texttt{порождатель} --- принимает описание на русском, генерирует новый поток
+\end{itemize}
+
+\subsection{Механизм загрузки потоков}
+
+\begin{lstlisting}[language=CommonLisp,caption={Reflection-based поиск функции выполнить}]
+(defun %найти-выполнить (имя)
+  "Находит функцию ВЫПОЛНИТЬ в пакете :ПОТОК-ИМЯ"
+  (let* ((pkg (find-package
+               (string-upcase (concatenate 'string "поток-" имя))))
+         (sym (when pkg (find-symbol "ВЫПОЛНИТЬ" pkg))))
+    (when (and sym (fboundp sym))
+      (symbol-function sym))))
+
+;; Состояние системы
+(defparameter *активные-потоки* (make-hash-table :test #'equal))
+\end{lstlisting}
+
+\textbf{Метациркулярность:} порождатель --- сам поток, который генерирует
+другие потоки через \texttt{compile-file + load} в живой образ SBCL.
+
+\subsection{Цель исследования}
+
+Спроектировать и реализовать \texttt{поток-граф-тестировщик}, который:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Принимает описание системы (естественный язык, JSON, Lisp-DSL)
+  \item Строит внутреннее представление графа состояний
+  \item Автоматически генерирует тест-кейсы через анализ графа
+  \item Выполняет тесты через существующую инфраструктуру
+  \item Возвращает отчёт: passed / failed / unreachable
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Теоретические основы}
+
+\subsection{Model-Based Testing (MBT)}
+
+\textbf{Model-Based Testing} --- методология тестирования, при которой
+тест-кейсы автоматически генерируются из формальной модели системы.
+
+\begin{infobox}[title={Ключевая идея MBT}]
+Вместо ручного написания тестов инженер создаёт \textbf{модель} системы
+(граф состояний, конечный автомат, спецификацию). Алгоритм обходит модель
+и генерирует последовательности входов, покрывающие все переходы.
+\end{infobox}
+
+\subsubsection{Transition Tree Method}
+
+Метод дерева переходов --- базовый алгоритм MBT:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Начать с начального состояния (корень дерева)
+  \item Для каждого исходящего перехода создать ветку
+  \item Рекурсивно повторить для всех достижимых состояний
+  \item Каждый путь от корня до листа --- один тест-кейс
+\end{enumerate}
+
+\subsubsection{Критерии покрытия}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lLl}
+  \toprule
+  \textbf{Критерий} & \textbf{Описание} & \textbf{Полнота} \\
+  \midrule
+  All-states     & Каждое состояние посещается хотя бы раз & Низкая \\
+  All-transitions & Каждый переход (ребро) выполняется хотя бы раз & Средняя \\
+  All-paths      & Все возможные пути от начала до конца & Высокая \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+\textit{Для \texttt{development\_system} рекомендуется:} \textbf{All-transitions} ---
+оптимальный баланс между полнотой и трудоёмкостью.
+
+\subsubsection{Negative Testing через граф}
+
+Negative testing --- проверка того, что система корректно обрабатывает
+некорректные входы. В контексте графа:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Определить \textbf{запрещённые состояния} (forbidden states)
+  \item Найти пути, ведущие к ним
+  \item Сгенерировать тесты, ожидающие исключение
+\end{itemize}
+
+\subsection{Property-Based Testing}
+
+\textbf{Property-Based Testing (PBT)} --- подход, при котором вместо конкретных
+тест-кейсов формулируются \textbf{инварианты} (свойства), которые должны
+выполняться для любого входа.
+
+\begin{lstlisting}[language=CommonLisp,caption={Пример property для потока эхо}]
+;; Инвариант: поток-эхо всегда возвращает строку, равную входу
+(for-all ((вход (gen-string)))
+  (is (string= вход (запустить-поток "эхо" вход))))
+\end{lstlisting}
+
+\subsubsection{QuickCheck-подход}
+
+Алгоритм QuickCheck:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Сгенерировать случайный вход из заданного генератора
+  \item Выполнить функцию
+  \item Проверить свойство
+  \item При неудаче --- shrink (минимизировать контрпример)
+  \item Повторить N раз (обычно 100)
+\end{enumerate}
+
+\subsubsection{Применение к CL-потокам}
+
+Для потоков \texttt{development\_system} можно сформулировать свойства:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lL}
+  \toprule
+  \textbf{Свойство} & \textbf{Формулировка} \\
+  \midrule
+  Типизация       & \texttt{(выполнить x)} всегда возвращает строку или выбрасывает исключение \\
+  Терминация      & \texttt{(выполнить x)} завершается за конечное время (timeout) \\
+  Идемпотентность & Для \texttt{эхо}: повторный вызов даёт тот же результат \\
+  Детерминизм     & Для \texttt{эхо}: один вход $\to$ один выход \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+\subsubsection{CL-библиотеки для PBT}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \texttt{fiveam} --- популярный testing framework с базовой поддержкой generators
+  \item \texttt{cl-quickcheck} --- порт Haskell QuickCheck (заброшен, но работает)
+  \item \texttt{check-it} --- современная альтернатива с shrinking
+\end{itemize}
+
+\subsection{Reachability Analysis}
+
+\textbf{Reachability Analysis} --- анализ достижимости состояний в графе.
+
+\subsubsection{Алгоритм}
+
+\begin{lstlisting}[language=CommonLisp,caption={BFS для анализа достижимости}]
+(defun достижимые-состояния (граф начало)
+  "Возвращает множество всех достижимых состояний из НАЧАЛО"
+  (let ((посещённые (make-hash-table :test #'equal))
+        (очередь (list начало)))
+    (loop while очередь
+          for текущее = (pop очередь)
+          unless (gethash текущее посещённые)
+          do (setf (gethash текущее посещённые) t)
+             (dolist (сосед (соседи граф текущее))
+               (push сосед очередь)))
+    (hash-table-keys посещённые)))
+\end{lstlisting}
+
+\subsubsection{Safety vs Liveness Properties}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lLL}
+  \toprule
+  \textbf{Тип} & \textbf{Формулировка} & \textbf{Пример в системе} \\
+  \midrule
+  Safety   & <<Плохое никогда не произойдёт>> & Поток не зависает бесконечно \\
+  Liveness & <<Хорошее в итоге случится>>     & Запрос в итоге получит ответ \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+\subsubsection{Нежелательные состояния в \texttt{development\_system}}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Поток выбросил необработанную ошибку (без \texttt{handler-case})
+  \item Мастер завис (нет ответа > N секунд)
+  \item Порождённый поток не компилируется
+  \item LLM вернул невалидный код
+  \item Бесконечный цикл в потоке
+\end{itemize}
+
+\subsection{TLA+ и формальная верификация}
+
+\textbf{TLA+} (Temporal Logic of Actions) --- язык формальной спецификации,
+разработанный Лесли Лэмпортом для описания конкурентных систем.
+
+\subsubsection{Применимость к CL-потокам}
+
+TLA+ описывает систему как:
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Состояние} --- значения всех переменных
+  \item \textbf{Действие} --- предикат на паре (старое состояние, новое состояние)
+  \item \textbf{Спецификация} --- формула темпоральной логики
+\end{itemize}
+
+\begin{warningbox}[title={Ограничения TLA+}]
+TLA+ требует изоморфного описания системы на отдельном языке.
+Для \texttt{development\_system} это означает дублирование логики.
+Рекомендуется \textbf{lightweight-подход}: описание графа без
+полного model checking.
+\end{warningbox}
+
+\subsection{Alloy для описания графа}
+
+\textbf{Alloy} --- язык декларативного моделирования с автоматическим
+поиском контрпримеров.
+
+\subsubsection{Relational Model}
+
+В Alloy всё --- отношения:
+
+\begin{lstlisting}[language={},caption={Пример Alloy-спецификации}]
+sig State {}
+sig Flow { executes: State -> State }
+
+pred valid_flow[f: Flow] {
+  all s: State | some f.executes[s] implies
+    f.executes[s] in State
+}
+
+run valid_flow for 5
+\end{lstlisting}
+
+\subsubsection{Применимость}
+
+Alloy полезен для:
+\begin{itemize}[leftmargin=1.5em]
+  \item Поиска контрпримеров к инвариантам
+  \item Проверки полноты графа (все состояния достижимы)
+  \item Обнаружения тупиков (deadlocks)
+\end{itemize}
+
+\textit{Для MVP:} Alloy избыточен. Достаточно ручного анализа графа
+с BFS/DFS.
+
+\subsection{LLM как генератор тест-кейсов}
+
+\subsubsection{Prompt Engineering для извлечения тестов}
+
+\begin{lstlisting}[language={},caption={Промпт для генерации тестов из описания}]
+Система описана следующим образом:
+<описание системы>
+
+Граф состояний:
+- Начальное состояние: idle
+- Целевые состояния: result_ready
+- Запрещённые состояния: error, timeout
+
+Сгенерируй тест-кейсы в формате:
+ТЕСТ: <название>
+ВХОД: <входные данные>
+ОЖИДАНИЕ: <целевое состояние или exception>
+\end{lstlisting}
+
+\subsubsection{Проблема галлюцинаций}
+
+LLM может сгенерировать несуществующие переходы или состояния.
+
+\textbf{Митигация:}
+\begin{enumerate}[leftmargin=1.5em]
+  \item Валидация сгенерированных тестов против исходного графа
+  \item Self-critique: попросить LLM проверить свой же вывод
+  \item Человек проверяет первые N тестов
+\end{enumerate}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Граф состояний development\_system}
+
+\subsection{Полный граф цикла обработки сообщения}
+
+На рисунке~\ref{fig:state-graph} представлен граф состояний для одного
+цикла обработки входящего сообщения в \texttt{development\_system}.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  ->,
+  >=Stealth,
+  node distance=2.5cm and 3cm,
+  state/.style={
+    rectangle, rounded corners=6pt,
+    draw, thick, minimum width=2.8cm, minimum height=1cm,
+    font=\small\ttfamily, align=center
+  },
+  init/.style={state, fill=StateInit!20, draw=StateInit},
+  target/.style={state, fill=StateTarget!20, draw=StateTarget},
+  forbid/.style={state, fill=StateForbid!20, draw=StateForbid},
+  normal/.style={state, fill=LightGray, draw=StateNormal},
+  edge/.style={thick, font=\scriptsize},
+]
+
+% Состояния
+\node[init]   (idle)     {idle\\(ожидание)};
+\node[normal] (recv)     [below=of idle]     {command\_received\\(команда получена)};
+\node[normal] (parse)    [below=of recv]     {command\_parsed\\(команда разобрана)};
+\node[normal] (lookup)   [below left=2cm and 1.5cm of parse]  {flow\_lookup\\(поиск потока)};
+\node[normal] (running)  [below=of lookup]   {flow\_running\\(поток выполняется)};
+\node[target] (result)   [below=of running]  {result\_ready\\(результат готов)};
+\node[normal] (respond)  [right=3.5cm of result] {response\_sent\\(ответ отправлен)};
+
+% Запрещённые состояния
+\node[forbid] (notfound) [below right=2cm and 1.5cm of parse] {flow\_not\_found\\(поток не найден)};
+\node[forbid] (execerr)  [right=3.5cm of running] {execution\_error\\(ошибка выполнения)};
+\node[forbid] (timeout)  [right=3.5cm of lookup]  {timeout\\(таймаут)};
+\node[forbid] (llmerr)   [below=of timeout]       {llm\_error\\(ошибка LLM)};
+
+% Рёбра
+\draw[edge] (idle) -- node[right] {сообщение} (recv);
+\draw[edge] (recv) -- node[right] {парсинг OK} (parse);
+\draw[edge] (parse) -- node[left, pos=0.3] {/запустить} (lookup);
+\draw[edge] (parse) -- node[right, pos=0.3] {поток не найден} (notfound);
+\draw[edge] (lookup) -- node[left] {найден} (running);
+\draw[edge] (lookup) -- node[above, pos=0.4] {таймаут поиска} (timeout);
+\draw[edge] (running) -- node[left] {выполнить OK} (result);
+\draw[edge] (running) -- node[above] {exception} (execerr);
+\draw[edge] (running) to[bend right=20] node[left, pos=0.3] {LLM fail} (llmerr);
+\draw[edge] (result) -- node[above] {отправка} (respond);
+\draw[edge] (respond) to[bend right=40] node[right] {цикл} (idle);
+
+% Легенда
+\node[init, minimum width=1.5cm, minimum height=0.6cm]
+  at (-3.5, -14) (leg1) {};
+\node[right=0.2cm of leg1, font=\small] {Начальное};
+
+\node[target, minimum width=1.5cm, minimum height=0.6cm]
+  at (0.5, -14) (leg2) {};
+\node[right=0.2cm of leg2, font=\small] {Целевое};
+
+\node[forbid, minimum width=1.5cm, minimum height=0.6cm]
+  at (4.5, -14) (leg3) {};
+\node[right=0.2cm of leg3, font=\small] {Запрещённое};
+
+\end{tikzpicture}
+\caption{Граф состояний цикла обработки сообщения в \texttt{development\_system}}
+\label{fig:state-graph}
+\end{figure}
+
+\subsection{Инварианты системы}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lL}
+  \toprule
+  \textbf{Инвариант} & \textbf{Формулировка} \\
+  \midrule
+  I1. Типизация & Функция \texttt{выполнить} возвращает строку или выбрасывает \texttt{condition} \\
+  I2. Терминация & Любой вызов завершается за \texttt{*таймаут-потока*} секунд \\
+  I3. Атомарность & Один поток не может изменить состояние другого во время выполнения \\
+  I4. Идемпотентность & \texttt{(выполнить эхо x)} = \texttt{(выполнить эхо x)} для любого x \\
+  I5. Целостность & После ошибки система возвращается в \texttt{idle} \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Переходы и триггеры}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{llL}
+  \toprule
+  \textbf{Из} & \textbf{В} & \textbf{Триггер} \\
+  \midrule
+  idle & command\_received & Входящее сообщение из Telegram \\
+  command\_received & command\_parsed & Успешный парсинг команды \\
+  command\_parsed & flow\_lookup & Команда \texttt{/запустить <имя>} \\
+  command\_parsed & flow\_not\_found & Неизвестная команда \\
+  flow\_lookup & flow\_running & Пакет и функция найдены \\
+  flow\_lookup & timeout & Поиск превысил таймаут \\
+  flow\_running & result\_ready & \texttt{выполнить} вернула строку \\
+  flow\_running & execution\_error & \texttt{выполнить} выбросила condition \\
+  flow\_running & llm\_error & LLM-запрос не удался \\
+  result\_ready & response\_sent & Telegram API принял ответ \\
+  response\_sent & idle & Цикл завершён \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Архитектура поток-граф-тестировщик}
+
+\subsection{Обзор}
+
+\texttt{Поток-граф-тестировщик} --- специализированный поток, который:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Принимает описание системы в одном из трёх форматов
+  \item Парсит описание и строит внутренний граф
+  \item Применяет алгоритмы анализа графа
+  \item Генерирует тест-кейсы
+  \item Выполняет тесты через \texttt{запустить-поток}
+  \item Возвращает структурированный отчёт
+\end{enumerate}
+
+\subsection{Три варианта входного формата}
+
+\subsubsection{Вариант А: естественный язык}
+
+\begin{lstlisting}[language={},caption={Описание на естественном языке}]
+Система: Мастер принимает команду /запустить эхо задача
+Ожидаемое: возвращает строку равную задаче
+Нежелательное: пустой ответ, исключение в потоке
+
+Система: Мастер принимает команду /запустить питон "1+1"
+Ожидаемое: возвращает строку с результатом вычисления
+Нежелательное: ошибка синтаксиса, таймаут
+\end{lstlisting}
+
+\textbf{Плюсы:} Минимальный порог входа, понятно любому.\\
+\textbf{Минусы:} LLM должен интерпретировать, возможны ошибки.
+
+\subsubsection{Вариант Б: JSON}
+
+\begin{lstlisting}[language=JSON,caption={Граф в формате JSON}]
+{
+  "nodes": [
+    {"id": "idle", "type": "initial"},
+    {"id": "command_received", "type": "normal"},
+    {"id": "flow_running", "type": "normal"},
+    {"id": "result_ready", "type": "target"},
+    {"id": "error", "type": "forbidden"}
+  ],
+  "edges": [
+    {"from": "idle", "to": "command_received",
+     "trigger": "message_received"},
+    {"from": "command_received", "to": "flow_running",
+     "trigger": "flow_found"},
+    {"from": "command_received", "to": "error",
+     "trigger": "flow_not_found"},
+    {"from": "flow_running", "to": "result_ready",
+     "trigger": "execute_ok"},
+    {"from": "flow_running", "to": "error",
+     "trigger": "exception"}
+  ],
+  "tests": {
+    "happy_path": {
+      "input": "/запустить эхо привет",
+      "target": "result_ready"
+    },
+    "error_path": {
+      "input": "/запустить несуществующий",
+      "target": "error",
+      "expect_exception": true
+    }
+  }
+}
+\end{lstlisting}
+
+\textbf{Плюсы:} Точный, машиночитаемый, нет интерпретации.\\
+\textbf{Минусы:} Громоздкий, требует знания формата.
+
+\subsubsection{Вариант В: Lisp DSL}
+
+\begin{lstlisting}[language=CommonLisp,caption={Граф в Lisp DSL}]
+(defgraph мастер-цикл
+  ;; Состояния
+  (state :idle         :initial t)
+  (state :cmd-received)
+  (state :flow-running)
+  (state :result-ready :target t)
+  (state :error        :forbidden t)
+  (state :timeout      :forbidden t)
+
+  ;; Переходы
+  (transition :idle -> :cmd-received
+    :via "сообщение получено")
+  (transition :cmd-received -> :flow-running
+    :when "поток найден")
+  (transition :cmd-received -> :error
+    :when "поток не найден")
+  (transition :flow-running -> :result-ready
+    :when "выполнить вернула строку")
+  (transition :flow-running -> :error
+    :when "exception")
+  (transition :flow-running -> :timeout
+    :when "превышен таймаут")
+
+  ;; Тесты
+  (test "эхо возвращает вход"
+    :input "/запустить эхо привет"
+    :expect :result-ready
+    :assert (string= результат "привет"))
+
+  (test "несуществующий поток - ошибка"
+    :input "/запустить несуществующий"
+    :expect :error))
+\end{lstlisting}
+
+\textbf{Плюсы:} Естественный для системы на Lisp, расширяемый.\\
+\textbf{Минусы:} Требует знания Lisp.
+
+\begin{successbox}[title={Рекомендация}]
+Для \texttt{development\_system} рекомендуется \textbf{Lisp DSL} как основной
+формат. JSON --- для интероперабельности. Естественный язык --- для быстрых
+прототипов через LLM.
+\end{successbox}
+
+\subsection{Алгоритм генерации тестов из графа}
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Парсинг описания} $\to$ внутренний граф (adjacency list)
+  \item \textbf{BFS от начального состояния} до всех target states $\to$ happy path tests
+  \item \textbf{BFS до forbidden states} $\to$ negative tests (ожидаем exception)
+  \item \textbf{Анализ unreachable states} $\to$ dead code / неполная спецификация
+  \item \textbf{Генерация CL-кода} через порождатель $\to$ тест-потоки
+\end{enumerate}
+
+\begin{lstlisting}[language=CommonLisp,caption={Алгоритм генерации тестов}]
+(defun сгенерировать-тесты (граф)
+  "Генерирует тест-кейсы из графа состояний"
+  (let ((начало (найти-начальное граф))
+        (целевые (найти-целевые граф))
+        (запрещённые (найти-запрещённые граф))
+        (тесты nil))
+    ;; Happy path: пути к целевым состояниям
+    (dolist (цель целевые)
+      (let ((путь (bfs-путь граф начало цель)))
+        (when путь
+          (push (make-тест :имя (format nil "happy-~A" цель)
+                           :путь путь
+                           :ожидание :success)
+                тесты))))
+    ;; Negative: пути к запрещённым состояниям
+    (dolist (запр запрещённые)
+      (let ((путь (bfs-путь граф начало запр)))
+        (when путь
+          (push (make-тест :имя (format nil "negative-~A" запр)
+                           :путь путь
+                           :ожидание :exception)
+                тесты))))
+    ;; Недостижимые состояния - предупреждение
+    (let ((достижимые (достижимые-состояния граф начало)))
+      (dolist (узел (все-узлы граф))
+        (unless (member узел достижимые)
+          (push (make-тест :имя (format nil "unreachable-~A" узел)
+                           :путь nil
+                           :ожидание :warning)
+                тесты))))
+    (nreverse тесты)))
+\end{lstlisting}
+
+\subsection{Интеграция с существующим мастером}
+
+\begin{lstlisting}[language={},numbers=none,caption={Пример команд}]
+;; Запуск с JSON-графом
+/запустить граф-тестировщик граф={"nodes":[...], "edges":[...]}
+
+;; Запуск с DSL
+/запустить граф-тестировщик дсл=(defgraph мастер-цикл ...)
+
+;; Запуск с чтением из файла
+/запустить граф-тестировщик файл=AGENT.md
+
+;; Результат:
+;; ✅ тест-1: /запустить эхо "привет" -> "привет" PASS
+;; ✅ тест-2: /запустить питон "1+1" -> "2" PASS
+;; ❌ тест-3: /запустить несуществующий -> ERROR (expected) FAIL
+;; 🟡 тест-4: состояние timeout - недостижимо в тестах
+\end{lstlisting}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Реализация}
+
+\subsection{Структуры данных}
+
+\begin{lstlisting}[language=CommonLisp,caption={Базовые структуры данных}]
+(defpackage :поток-граф-тестировщик
+  (:use :cl)
+  (:export #:выполнить
+           #:парсить-граф #:сгенерировать-тесты
+           #:запустить-тесты #:форматировать-отчёт))
+
+(in-package :поток-граф-тестировщик)
+
+;;; Узел графа
+(defstruct узел
+  (id nil :type symbol)
+  (тип :normal :type (member :initial :normal :target :forbidden))
+  (метаданные nil :type list))
+
+;;; Ребро графа
+(defstruct ребро
+  (из nil :type symbol)
+  (в nil :type symbol)
+  (триггер "" :type string)
+  (условие nil :type (or null function)))
+
+;;; Граф
+(defstruct граф
+  (узлы nil :type list)    ; список структур узел
+  (рёбра nil :type list)   ; список структур ребро
+  (тесты nil :type list))  ; предопределённые тесты
+
+;;; Тест-кейс
+(defstruct тест-кейс
+  (имя "" :type string)
+  (путь nil :type list)         ; последовательность узлов
+  (вход "" :type string)        ; входные данные
+  (ожидание :success :type (member :success :exception :warning))
+  (assert nil :type (or null function)))
+
+;;; Результат теста
+(defstruct результат-теста
+  (тест nil :type тест-кейс)
+  (статус :pending :type (member :pass :fail :skip :error :pending))
+  (выход nil)
+  (время-мс 0 :type integer)
+  (сообщение "" :type string))
+\end{lstlisting}
+
+\subsection{Парсинг Lisp DSL}
+
+\begin{lstlisting}[language=CommonLisp,caption={Макрос defgraph}]
+(defmacro defgraph (имя &body определения)
+  "Определяет граф состояний"
+  `(progn
+     (defparameter ,имя
+       (make-граф
+        :узлы (list ,@(mapcar #'обработать-state
+                              (remove-if-not #'state-p определения)))
+        :рёбра (list ,@(mapcar #'обработать-transition
+                               (remove-if-not #'transition-p определения)))
+        :тесты (list ,@(mapcar #'обработать-test
+                               (remove-if-not #'test-p определения)))))
+     ,имя))
+
+(defun state-p (форма)
+  (and (listp форма) (eq (first форма) 'state)))
+
+(defun transition-p (форма)
+  (and (listp форма) (eq (first форма) 'transition)))
+
+(defun test-p (форма)
+  (and (listp форма) (eq (first форма) 'test)))
+
+(defun обработать-state (форма)
+  ;; (state :имя :initial t :target nil :forbidden nil)
+  (destructuring-bind (state id &key initial target forbidden) форма
+    (declare (ignore state))
+    `(make-узел :id ,id
+                :тип ,(cond (initial :initial)
+                            (target :target)
+                            (forbidden :forbidden)
+                            (t :normal)))))
+
+(defun обработать-transition (форма)
+  ;; (transition :из -> :в :when "условие" :via "триггер")
+  (destructuring-bind (transition из arrow в &key when via) форма
+    (declare (ignore transition arrow))
+    `(make-ребро :из ,из :в ,в
+                 :триггер ,(or via when ""))))
+\end{lstlisting}
+
+\subsection{Парсинг JSON}
+
+\begin{lstlisting}[language=CommonLisp,caption={Парсинг JSON в граф}]
+(defun парсить-json-граф (json-строка)
+  "Парсит JSON-описание графа"
+  (let* ((данные (yason:parse json-строка))
+         (узлы-json (gethash "nodes" данные))
+         (рёбра-json (gethash "edges" данные))
+         (тесты-json (gethash "tests" данные)))
+    (make-граф
+     :узлы (mapcar
+            (lambda (у)
+              (make-узел
+               :id (intern (string-upcase (gethash "id" у)) :keyword)
+               :тип (intern (string-upcase
+                            (or (gethash "type" у) "normal"))
+                           :keyword)))
+            узлы-json)
+     :рёбра (mapcar
+             (lambda (р)
+               (make-ребро
+                :из (intern (string-upcase (gethash "from" р)) :keyword)
+                :в (intern (string-upcase (gethash "to" р)) :keyword)
+                :триггер (or (gethash "trigger" р) "")))
+             рёбра-json)
+     :тесты (when тесты-json
+              (maphash
+               (lambda (имя спец)
+                 (make-тест-кейс
+                  :имя имя
+                  :вход (gethash "input" спец)
+                  :ожидание (if (gethash "expect_exception" спец)
+                                :exception
+                                :success)))
+               тесты-json)))))
+\end{lstlisting}
+
+\subsection{Алгоритмы анализа графа}
+
+\begin{lstlisting}[language=CommonLisp,caption={BFS и анализ достижимости}]
+;;; Adjacency list из рёбер
+(defun построить-adjacency (граф)
+  (let ((adj (make-hash-table :test #'eq)))
+    (dolist (ребро (граф-рёбра граф))
+      (push (ребро-в ребро)
+            (gethash (ребро-из ребро) adj)))
+    adj))
+
+;;; BFS поиск пути
+(defun bfs-путь (граф из в)
+  "Возвращает кратчайший путь от ИЗ до В или NIL"
+  (let ((adj (построить-adjacency граф))
+        (посещённые (make-hash-table :test #'eq))
+        (родители (make-hash-table :test #'eq))
+        (очередь (list из)))
+    (setf (gethash из посещённые) t)
+    (loop while очередь
+          for текущий = (pop очередь)
+          do (when (eq текущий в)
+               (return-from bfs-путь
+                 (восстановить-путь родители из в)))
+             (dolist (сосед (gethash текущий adj))
+               (unless (gethash сосед посещённые)
+                 (setf (gethash сосед посещённые) t)
+                 (setf (gethash сосед родители) текущий)
+                 (push сосед очередь))))
+    nil))
+
+(defun восстановить-путь (родители из в)
+  (let ((путь (list в)))
+    (loop for текущий = (gethash (first путь) родители)
+          while (and текущий (not (eq текущий из)))
+          do (push текущий путь))
+    (push из путь)
+    путь))
+
+;;; Поиск состояний по типу
+(defun найти-по-типу (граф тип)
+  (remove-if-not (lambda (у) (eq (узел-тип у) тип))
+                 (граф-узлы граф)))
+
+(defun найти-начальное (граф)
+  (узел-id (first (найти-по-типу граф :initial))))
+
+(defun найти-целевые (граф)
+  (mapcar #'узел-id (найти-по-типу граф :target)))
+
+(defun найти-запрещённые (граф)
+  (mapcar #'узел-id (найти-по-типу граф :forbidden)))
+\end{lstlisting}
+
+\subsection{Выполнение тестов}
+
+\begin{lstlisting}[language=CommonLisp,caption={Выполнение тест-кейсов}]
+(defparameter *таймаут-теста* 10) ; секунды
+
+(defun выполнить-тест (тест)
+  "Выполняет один тест-кейс и возвращает результат"
+  (let ((начало (get-internal-real-time))
+        (выход nil)
+        (статус :pending)
+        (сообщение ""))
+    (handler-case
+        (progn
+          ;; Парсим вход: /запустить <поток> <аргумент>
+          (multiple-value-bind (поток аргумент)
+              (парсить-команду-тест (тест-кейс-вход тест))
+            (setf выход (запустить-поток поток аргумент))
+            ;; Проверяем ожидание
+            (case (тест-кейс-ожидание тест)
+              (:success
+               (if (stringp выход)
+                   (progn
+                     (setf статус :pass)
+                     (setf сообщение (format nil "OK: ~A"
+                                             (subseq выход 0
+                                                    (min 50 (length выход))))))
+                   (progn
+                     (setf статус :fail)
+                     (setf сообщение "Ожидалась строка"))))
+              (:exception
+               ;; Ожидали исключение, но не получили
+               (setf статус :fail)
+               (setf сообщение "Ожидалось исключение, получен результат")))))
+      (error (e)
+        ;; Получили исключение
+        (case (тест-кейс-ожидание тест)
+          (:exception
+           (setf статус :pass)
+           (setf сообщение (format nil "OK: exception ~A" (type-of e))))
+          (otherwise
+           (setf статус :error)
+           (setf сообщение (format nil "ERROR: ~A" e))))))
+    (let ((конец (get-internal-real-time)))
+      (make-результат-теста
+       :тест тест
+       :статус статус
+       :выход выход
+       :время-мс (round (* 1000 (/ (- конец начало)
+                                   internal-time-units-per-second)))
+       :сообщение сообщение))))
+
+(defun запустить-тесты (граф)
+  "Выполняет все тесты из графа"
+  (let ((тесты (append (граф-тесты граф)
+                       (сгенерировать-тесты граф))))
+    (mapcar #'выполнить-тест тесты)))
+\end{lstlisting}
+
+\subsection{Точка входа потока}
+
+\begin{lstlisting}[language=CommonLisp,caption={Функция выполнить для потока}]
+(defun выполнить (задача)
+  "Главная точка входа потока-граф-тестировщика"
+  (handler-case
+      (let* ((формат (определить-формат задача))
+             (граф (case формат
+                     (:json (парсить-json-граф (извлечь-json задача)))
+                     (:dsl  (eval (read-from-string
+                                   (извлечь-dsl задача))))
+                     (:file (парсить-файл (извлечь-путь задача)))
+                     (t     (парсить-естественный задача))))
+             (результаты (запустить-тесты граф)))
+        (форматировать-отчёт результаты))
+    (error (e)
+      (format nil "❌ Ошибка граф-тестировщика: ~A" e))))
+
+(defun определить-формат (задача)
+  (cond ((search "граф={" задача) :json)
+        ((search "дсл=(" задача) :dsl)
+        ((search "файл=" задача) :file)
+        (t :естественный)))
+
+(defun форматировать-отчёт (результаты)
+  (with-output-to-string (out)
+    (format out "~%📊 Отчёт тестирования~%")
+    (format out "━━━━━━━━━━━━━━━━━━━━━~%")
+    (let ((pass 0) (fail 0) (skip 0) (error 0))
+      (dolist (р результаты)
+        (case (результат-теста-статус р)
+          (:pass  (incf pass)
+                  (format out "✅ ~A (~Dms)~%"
+                          (тест-кейс-имя (результат-теста-тест р))
+                          (результат-теста-время-мс р)))
+          (:fail  (incf fail)
+                  (format out "❌ ~A: ~A~%"
+                          (тест-кейс-имя (результат-теста-тест р))
+                          (результат-теста-сообщение р)))
+          (:skip  (incf skip)
+                  (format out "🟡 ~A: пропущен~%"
+                          (тест-кейс-имя (результат-теста-тест р))))
+          (:error (incf error)
+                  (format out "💥 ~A: ~A~%"
+                          (тест-кейс-имя (результат-теста-тест р))
+                          (результат-теста-сообщение р)))))
+      (format out "━━━━━━━━━━━━━━━━━━━━━~%")
+      (format out "Итого: ✅~D ❌~D 🟡~D 💥~D~%"
+              pass fail skip error))))
+\end{lstlisting}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Property-Based и Contract Testing}
+
+\subsection{Fiveam: базовое тестирование}
+
+\begin{lstlisting}[language=CommonLisp,caption={Настройка fiveam для потоков}]
+(ql:quickload :fiveam)
+
+(defpackage :тесты-потоков
+  (:use :cl :fiveam)
+  (:export #:запустить-все))
+
+(in-package :тесты-потоков)
+
+(def-suite потоки-suite
+  :description "Тесты для вычислительных потоков")
+
+(in-suite потоки-suite)
+
+;;; Базовые тесты
+(test эхо-возвращает-вход
+  "Поток эхо должен вернуть входную строку"
+  (is (string= "привет"
+               (запустить-поток "эхо" "привет")))
+  (is (string= ""
+               (запустить-поток "эхо" "")))
+  (is (string= "123"
+               (запустить-поток "эхо" "123"))))
+
+(test несуществующий-поток-ошибка
+  "Несуществующий поток должен выбросить ошибку"
+  (signals error
+    (запустить-поток "несуществующий-поток-xyz" "тест")))
+
+(test поток-возвращает-строку
+  "Любой поток должен вернуть строку или выбросить ошибку"
+  (dolist (имя '("эхо" "уточнение" "исполнитель"))
+    (let ((результат (запустить-поток имя "тест")))
+      (is (stringp результат)
+          "Поток ~A должен вернуть строку" имя))))
+\end{lstlisting}
+
+\subsection{Property-Based Testing с check-it}
+
+\begin{lstlisting}[language=CommonLisp,caption={Property-based тесты}]
+(ql:quickload :check-it)
+
+(defpackage :тесты-свойств
+  (:use :cl :check-it)
+  (:export #:проверить-свойства))
+
+(in-package :тесты-свойств)
+
+;;; Генераторы
+(defgenerator gen-safe-string ()
+  "Генератор безопасных строк (без управляющих символов)"
+  (let ((len (random 100)))
+    (coerce (loop repeat len
+                  collect (code-char (+ 32 (random 95))))
+            'string)))
+
+;;; Свойства
+(defproperty эхо-идемпотентен
+  "Эхо всегда возвращает то же самое при повторном вызове"
+  ((вход (gen-safe-string)))
+  (let ((результат-1 (запустить-поток "эхо" вход))
+        (результат-2 (запустить-поток "эхо" вход)))
+    (string= результат-1 результат-2)))
+
+(defproperty эхо-identity
+  "Эхо является identity-функцией"
+  ((вход (gen-safe-string)))
+  (string= вход (запустить-поток "эхо" вход)))
+
+(defproperty все-потоки-возвращают-строку
+  "Любой поток возвращает строку или выбрасывает ошибку"
+  ((имя (gen-element '("эхо" "уточнение")))
+   (вход (gen-safe-string)))
+  (handler-case
+      (stringp (запустить-поток имя вход))
+    (error () t)))  ; исключение - тоже допустимый результат
+
+;;; Запуск
+(defun проверить-свойства ()
+  (check эхо-идемпотентен :times 100)
+  (check эхо-identity :times 100)
+  (check все-потоки-возвращают-строку :times 50))
+\end{lstlisting}
+
+\subsection{Contract-Based Testing}
+
+\begin{lstlisting}[language=CommonLisp,caption={Контракты для потоков}]
+(defpackage :контракты
+  (:use :cl)
+  (:export #:defcontract #:with-contract #:проверить-контракт))
+
+(in-package :контракты)
+
+;;; Структура контракта
+(defstruct контракт
+  (имя nil :type symbol)
+  (предусловие nil :type function)
+  (постусловие nil :type function)
+  (инвариант nil :type (or null function)))
+
+;;; Хранилище контрактов
+(defparameter *контракты* (make-hash-table :test #'equal))
+
+;;; Макрос для определения контракта
+(defmacro defcontract (имя-потока &key pre post invariant)
+  "Определяет контракт для потока"
+  `(setf (gethash ,имя-потока *контракты*)
+         (make-контракт
+          :имя (intern (string-upcase ,имя-потока))
+          :предусловие (lambda (вход) ,pre)
+          :постусловие (lambda (вход выход) ,post)
+          :инвариант ,(when invariant
+                        `(lambda () ,invariant)))))
+
+;;; Пример контрактов
+(defcontract "эхо"
+  :pre (stringp вход)
+  :post (and (stringp выход)
+             (string= вход выход)))
+
+(defcontract "питон"
+  :pre (stringp вход)
+  :post (stringp выход)
+  :invariant (< (length выход) 100000))  ; защита от бесконечного вывода
+
+;;; Обёртка с проверкой контракта
+(defun с-контрактом (имя-потока вход)
+  "Выполняет поток с проверкой контракта"
+  (let ((контракт (gethash имя-потока *контракты*)))
+    (when контракт
+      ;; Проверяем предусловие
+      (unless (funcall (контракт-предусловие контракт) вход)
+        (error "Нарушено предусловие для ~A: ~A" имя-потока вход)))
+    ;; Выполняем
+    (let ((выход (запустить-поток имя-потока вход)))
+      (when контракт
+        ;; Проверяем постусловие
+        (unless (funcall (контракт-постусловие контракт) вход выход)
+          (error "Нарушено постусловие для ~A" имя-потока))
+        ;; Проверяем инвариант
+        (when (контракт-инвариант контракт)
+          (unless (funcall (контракт-инвариант контракт))
+            (error "Нарушен инвариант для ~A" имя-потока))))
+      выход)))
+\end{lstlisting}
+
+\subsection{Автоматическая генерация тестов из контрактов}
+
+\begin{lstlisting}[language=CommonLisp,caption={Генерация тестов из контрактов}]
+(defun сгенерировать-тесты-из-контрактов ()
+  "Генерирует тест-кейсы из всех зарегистрированных контрактов"
+  (let ((тесты nil))
+    (maphash
+     (lambda (имя контракт)
+       ;; Тест: предусловие выполняется для валидного входа
+       (push (make-тест-кейс
+              :имя (format nil "~A-pre-valid" имя)
+              :вход "тестовая строка"
+              :ожидание :success)
+             тесты)
+       ;; Тест: постусловие выполняется
+       (push (make-тест-кейс
+              :имя (format nil "~A-post-holds" имя)
+              :вход "тест"
+              :ожидание :success
+              :assert (lambda (вход выход)
+                        (funcall (контракт-постусловие контракт)
+                                 вход выход)))
+             тесты))
+     *контракты*)
+    (nreverse тесты)))
+\end{lstlisting}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Мета-уровень: система тестирует себя}
+
+\subsection{Рекурсивное тестирование}
+
+\texttt{Граф-тестировщик} сам является потоком в системе. Это создаёт
+интересную возможность: \textbf{система может тестировать себя}.
+
+\begin{lstlisting}[language=CommonLisp,caption={Самотестирование графа-тестировщика}]
+;; Граф для тестирования самого граф-тестировщика
+(defgraph тестировщик-мета
+  (state :idle :initial t)
+  (state :parsing)
+  (state :generating)
+  (state :executing)
+  (state :reporting :target t)
+  (state :parse-error :forbidden t)
+  (state :execution-error :forbidden t)
+
+  (transition :idle -> :parsing
+    :via "получен граф")
+  (transition :parsing -> :generating
+    :when "граф валиден")
+  (transition :parsing -> :parse-error
+    :when "синтаксическая ошибка")
+  (transition :generating -> :executing
+    :when "тесты сгенерированы")
+  (transition :executing -> :reporting
+    :when "все тесты выполнены")
+  (transition :executing -> :execution-error
+    :when "критическая ошибка")
+
+  (test "самотест: пустой граф"
+    :input "/запустить граф-тестировщик граф={}"
+    :expect :parse-error)
+
+  (test "самотест: простой граф"
+    :input "/запустить граф-тестировщик граф={\"nodes\":[{\"id\":\"a\",\"type\":\"initial\"}],\"edges\":[]}"
+    :expect :reporting))
+\end{lstlisting}
+
+\subsection{Иерархия тестирования}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  level/.style={
+    rectangle, rounded corners=4pt, draw, thick,
+    minimum width=4cm, minimum height=1cm,
+    font=\small, align=center
+  },
+  arrow/.style={->, thick, >=Stealth},
+]
+
+\node[level, fill=AccentBlue!20] (l0) at (0, 0) {Уровень 0\\Потоки системы};
+\node[level, fill=AccentTeal!20] (l1) at (0, -2.5) {Уровень 1\\Граф-тестировщик};
+\node[level, fill=AccentOrange!20] (l2) at (0, -5) {Уровень 2\\Тест тестировщика};
+\node[level, fill=GreenOk!20] (l3) at (0, -7.5) {Уровень 3\\Мета-тест};
+
+\draw[arrow] (l1) -- node[right] {тестирует} (l0);
+\draw[arrow] (l2) -- node[right] {тестирует} (l1);
+\draw[arrow] (l3) -- node[right] {тестирует} (l2);
+\draw[arrow, dashed] (l3) to[bend right=60] node[left] {рекурсия} (l3);
+
+\end{tikzpicture}
+\caption{Иерархия мета-тестирования}
+\end{figure}
+
+\subsection{Ограничения рекурсивного тестирования}
+
+\begin{warningbox}[title={Проблема полноты}]
+Система не может полностью протестировать себя --- это следует из теоремы
+Гёделя о неполноте. Тест, проверяющий корректность всех тестов, не может
+быть частью той же системы.
+\end{warningbox}
+
+\textbf{Практические ограничения:}
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Бесконечная регрессия:} Мета-тест тоже нужно тестировать
+  \item \textbf{Состояние образа:} Тесты могут менять глобальное состояние SBCL
+  \item \textbf{Побочные эффекты:} LLM-запросы, файловая система
+  \item \textbf{Детерминизм:} LLM-потоки недетерминированы
+\end{enumerate}
+
+\textbf{Митигации:}
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Ограничить глубину мета-тестирования (2--3 уровня)
+  \item Изолировать тесты через \texttt{let} и \texttt{unwind-protect}
+  \item Мокировать LLM-запросы для детерминизма
+  \item Использовать \texttt{with-compilation-unit} для изоляции компиляции
+\end{enumerate}
+
+\subsection{Порождатель как генератор тест-потоков}
+
+\begin{lstlisting}[language=CommonLisp,caption={Порождение тест-потока через порождатель}]
+(defun породить-тест-поток (имя-теста спецификация)
+  "Использует порождатель для создания специализированного тест-потока"
+  (let ((описание
+         (format nil
+                 "Создай поток тест-~A.
+
+                  Задача потока: выполнить тест согласно спецификации:
+                  ~A
+
+                  Поток должен:
+                  1. Вызвать тестируемую функцию
+                  2. Проверить результат
+                  3. Вернуть 'PASS' или 'FAIL: причина'"
+                 имя-теста
+                 спецификация)))
+    (запустить-поток "порождатель" описание)))
+
+;; Пример использования
+(породить-тест-поток
+ "эхо-длинная-строка"
+ "Проверить, что поток эхо корректно обрабатывает строки длиной 10000 символов")
+\end{lstlisting}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Roadmap}
+
+\subsection{MVP (1 день)}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item[\checkmark] Файл \texttt{тесты.lisp} --- наполнить базовыми тест-кейсами
+  \item[\checkmark] Простые assert-тесты для существующих потоков
+  \item[\checkmark] Интеграция с fiveam
+\end{itemize}
+
+\begin{lstlisting}[language=CommonLisp,caption={MVP: базовые тесты в тесты.lisp}]
+;; Минимальный набор тестов
+(assert (stringp (запустить-поток "эхо" "тест")))
+(assert (string= "привет" (запустить-поток "эхо" "привет")))
+(assert (handler-case
+            (progn (запустить-поток "несуществующий" "") nil)
+          (error () t)))
+\end{lstlisting}
+
+\subsection{Неделя 1}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \texttt{поток-граф-тестировщик.lisp} --- принимает JSON-граф
+  \item Парсинг JSON в структуру графа
+  \item BFS для анализа достижимости
+  \item Генерация и выполнение тестов
+  \item Форматирование отчёта для Telegram
+\end{itemize}
+
+\subsection{Неделя 2}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Lisp DSL (\texttt{defgraph})
+  \item Интеграция с порождателем: автогенерация тест-потоков
+  \item LLM читает AGENT.md $\to$ строит граф $\to$ генерирует тесты
+  \item Визуализация графа (TikZ / GraphViz экспорт)
+\end{itemize}
+
+\subsection{Месяц}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Property-based тестирование через check-it
+  \item Контракты: предусловия, постусловия, инварианты
+  \item Метаданные в \texttt{.мета} файлах потоков
+  \item CI-подобный цикл: граф-тестировщик запускается при изменениях
+  \item Статистика покрытия переходов
+\end{itemize}
+
+\subsection{Квартал}
+
+\begin{itemize}[leftmargin=1.5em]
+  \item Интеграция с TLA+ для формальной верификации критических потоков
+  \item Mutation testing: автоматические мутации кода для проверки тестов
+  \item Регрессионное тестирование с историей результатов
+  \item Web-интерфейс для просмотра графов и результатов
+\end{itemize}
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Риски}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lLl}
+  \toprule
+  \textbf{Риск} & \textbf{Описание} & \textbf{Митигация} \\
+  \midrule
+  Галлюцинации LLM
+    & LLM генерирует несуществующие переходы или состояния
+    & Валидация против исходного графа \\
+  Изоляция состояния
+    & Тесты влияют на глобальное состояние SBCL
+    & \texttt{unwind-protect}, fresh binding \\
+  Рекурсивное тестирование
+    & Бесконечная регрессия мета-тестов
+    & Ограничение глубины (2--3 уровня) \\
+  Неполнота спецификации
+    & Граф не описывает все состояния системы
+    & Анализ unreachable + warning \\
+  Недетерминизм LLM
+    & Результаты LLM-потоков нестабильны
+    & Мокирование для тестов, retry logic \\
+  Производительность
+    & Много LLM-запросов при генерации тестов
+    & Кэширование, batch, дешёвые модели \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Стоимость и ресурсы}
+
+\begin{center}
+\begin{tabular}{lrl}
+  \toprule
+  \textbf{Операция} & \textbf{Токены} & \textbf{Примерная стоимость} \\
+  \midrule
+  Парсинг естественного языка в граф & $\sim$1000 & \$0.003 \\
+  Генерация 10 тест-кейсов & $\sim$2000 & \$0.006 \\
+  Выполнение теста с LLM-потоком & $\sim$500 & \$0.0015 \\
+  Полный цикл (10 тестов) & $\sim$7000 & \$0.02 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Стоимость приемлема для персонального использования.
+
+% ═══════════════════════════════════════════════════════════════════
+\section{Заключение}
+
+\subsection{Ключевые выводы}
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Граф состояний --- мощный инструмент.} Формальное описание
+    системы как графа позволяет автоматически генерировать тесты, анализировать
+    достижимость и выявлять мёртвый код.
+
+  \item \textbf{Три формата --- для разных нужд.} Естественный язык для
+    быстрых прототипов, JSON для интероперабельности, Lisp DSL для полного
+    контроля.
+
+  \item \textbf{MBT + PBT = полное покрытие.} Model-Based Testing покрывает
+    структуру (переходы графа), Property-Based Testing покрывает данные
+    (инварианты).
+
+  \item \textbf{Метациркулярность --- преимущество и сложность.} Система
+    может тестировать себя, но это создаёт проблемы рекурсии и изоляции.
+
+  \item \textbf{Контракты формализуют ожидания.} Явные предусловия и
+    постусловия превращают неявные предположения в проверяемые свойства.
+\end{enumerate}
+
+\subsection{Критерий успеха}
+
+\begin{successbox}[title={Через месяц система считается успешной, если:}]
+\begin{itemize}[leftmargin=1em]
+  \item Можно описать новый поток как граф и сразу получить тесты
+  \item Все существующие потоки покрыты хотя бы базовыми тестами
+  \item Граф-тестировщик ловит регрессии при изменениях в потоках
+  \item Время на ручное тестирование сократилось на 50\%+
+\end{itemize}
+\end{successbox}
+
+\subsection{Следующие шаги}
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Реализовать MVP: базовые тесты в \texttt{тесты.lisp} + fiveam
+  \item Описать граф \texttt{development\_system} в Lisp DSL
+  \item Создать \texttt{поток-граф-тестировщик.lisp}
+  \item Запустить первый цикл автогенерации тестов
+  \item Интегрировать с порождателем для автоматического обновления тестов
+\end{enumerate}
+
+\vspace{1cm}
+\hrule
+\vspace{4mm}
+{\small\color{MidGray}
+  Документ подготовлен для Артемия.
+  Версия~1.0, 14~марта~2026.
+  Проект: \texttt{development\_system}.
+}
+
+\end{document}

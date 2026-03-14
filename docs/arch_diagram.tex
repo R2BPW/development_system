@@ -1,0 +1,156 @@
+% Standalone диаграмма архитектуры
+% xelatex arch_diagram.tex
+\documentclass[border=12pt, right=15pt]{standalone}
+
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setmainfont{DejaVu Sans}
+\setsansfont{DejaVu Sans}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, shadows.blur, calc}
+
+\definecolor{CTg}   {RGB}{0,   136, 204}
+\definecolor{CMst}  {RGB}{25,  50,  105}
+\definecolor{CMem}  {RGB}{10,  105,  80}
+\definecolor{CLrn}  {RGB}{140,  60,   0}
+\definecolor{CDiag} {RGB}{75,  25, 130}
+\definecolor{CAut}  {RGB}{155,  15,  15}
+\definecolor{CGen}  {RGB}{35,   90, 160}
+\definecolor{CNew}  {RGB}{20,  120,  50}
+\definecolor{BGcore}{RGB}{238, 244, 255}
+\definecolor{BGauto}{RGB}{255, 240, 240}
+\definecolor{Clbl}  {RGB}{80,   85, 105}
+\definecolor{Cwht}  {RGB}{252, 253, 255}
+
+\tikzset{
+  N/.style={
+    draw, rounded corners=4pt,
+    text=white, align=center,
+    font=\fontsize{8}{9.5}\selectfont,
+    minimum width=32mm, minimum height=10mm,
+    blur shadow={shadow blur steps=3,
+                 shadow xshift=0.5mm, shadow yshift=-0.5mm,
+                 shadow opacity=18}
+  },
+  Ntg/.style={N, fill=CTg,   draw=CTg!80!black,
+               minimum width=36mm,
+               font=\fontsize{8.5}{10}\bfseries},
+  Nmst/.style={N, fill=CMst,  draw=CMst!70!black,
+               minimum width=36mm, minimum height=11mm,
+               font=\fontsize{8.5}{10}\bfseries},
+  Nmem/.style={N, fill=CMem,  draw=CMem!70!black},
+  Nlrn/.style={N, fill=CLrn,  draw=CLrn!70!black},
+  Ndiag/.style={N, fill=CDiag, draw=CDiag!70!black, minimum width=36mm},
+  Naut/.style={N, fill=CAut,  draw=CAut!70!black,  minimum width=32mm},
+  Ngen/.style={N, fill=CGen,  draw=CGen!70!black},
+  Nnew/.style={N, fill=CNew,  draw=CNew!70!black,  minimum width=32mm},
+  A/.style={-{Stealth[length=4pt,width=3.5pt]}, line width=0.85pt},
+  Ad/.style={A, dashed},
+  L/.style={font=\fontsize{6.5}{7.5}\selectfont,
+             fill=Cwht, inner sep=1.5pt, text=Clbl, rounded corners=1.5pt},
+}
+
+\begin{document}
+\begin{tikzpicture}[x=1mm, y=1mm]
+
+% ── Узлы ─────────────────────────────────────────────────────────
+\node[Ntg]   at (  0,   0)  (tg)  {Telegram};
+\node[Nmst]  at (  0, -22)  (mst) {Мастер (SBCL)};
+
+\node[Nlrn]  at (-52, -44)  (lrn) {поток-обучение};
+\node[Nmem]  at (  0, -44)  (mem) {поток-память};
+\node[Ndiag] at ( 56, -44)  (dia) {поток-диагностика};
+
+\node[Naut]  at (  0, -66)  (aut) {поток-автоматор};
+\node[Ngen]  at ( 56, -66)  (gen) {порождатель};
+\node[Nnew]  at ( 56, -86)  (nw)  {новый поток};
+
+% ── Подложки ─────────────────────────────────────────────────────
+\begin{scope}[on background layer]
+  \node[fill=BGcore, draw=CMst!15, rounded corners=7pt,
+        inner sep=7pt, fit=(lrn)(mem)(dia),
+        label={[font=\fontsize{6.5}{8}\selectfont,
+                text=CMst!45!black,
+                anchor=north west, xshift=4pt, yshift=2pt]north west:потоки ядра}
+  ] (grpcore) {};
+  \node[fill=BGauto, draw=CAut!15, rounded corners=7pt,
+        inner sep=7pt, fit=(aut)(gen)(nw),
+        label={[font=\fontsize{6.5}{8}\selectfont,
+                text=CAut!55!black,
+                anchor=north west, xshift=4pt, yshift=2pt]north west:автоматизация}
+  ] (grpauto) {};
+\end{scope}
+
+% ── Вспомогательные точки ────────────────────────────────────────
+\coordinate (mst_bot) at ($(mst.south)+(0,-6)$);
+
+% ── Стрелки ──────────────────────────────────────────────────────
+
+% Telegram → Мастер
+\draw[A, color=CTg!75!black]
+  (tg.south) -- (mst.north)
+  node[L, midway, right=4pt] {сообщения};
+
+% Мастер → обучение  (вниз → влево → вниз)
+\coordinate (lrn_top) at ($(lrn.north)+(0,0)$);
+\draw[A, color=CLrn!75!black]
+  (mst.south west) -- ++(0,-6) -- (-52,-28) -- (lrn.north)
+  node[L, pos=0.6, above=1.5pt] {/обучить};
+
+% Мастер → память  (прямо вниз)
+\draw[A, color=CMem!75!black]
+  (mst.south) -- (mem.north)
+  node[L, midway, right=3pt] {/список};
+
+% Мастер → диагностика  (вниз → вправо → вниз)
+\draw[A, color=CDiag!75!black]
+  (mst.south east) -- ++(0,-6) -- (56,-28) -- (dia.north)
+  node[L, pos=0.6, above=1.5pt] {/диагностика};
+
+% обучение → память  (горизонтально, над центром)
+\draw[A, color=CLrn!80!black]
+  (lrn.east) -- (mem.west)
+  node[L, midway, above=2pt] {сохранить};
+
+% диагностика → память  (горизонтально, ниже центра, пунктир)
+\draw[Ad, color=CMem!75!black]
+  (dia.west) -- (mem.east)
+  node[L, midway, below=2pt] {найти похожие};
+
+% память → автоматор  (вниз)
+\draw[A, color=CMem!70!black]
+  (mem.south) -- (aut.north)
+  node[L, midway, right=3pt] {паттерны};
+
+% диагностика → автоматор  (вниз → влево → авт.восток)
+\coordinate (d_below) at ($(dia.south)+(0,-12)$);
+\coordinate (a_east)  at ($(aut.east)+(0,0)$);
+\draw[Ad, color=CDiag!55!black]
+  (dia.south) -- (d_below) -- ($(a_east)+(0,-12)$) -- (aut.east)
+  node[L, pos=0.45, right=2pt] {уверенность};
+
+% автоматор → порождатель  (горизонтально)
+\draw[A, color=CAut!80!black]
+  (aut.east) -- (gen.west)
+  node[L, midway, above=2pt] {описание};
+
+% порождатель → новый поток  (вниз)
+\draw[A, color=CGen!80!black]
+  (gen.south) -- (nw.north)
+  node[L, midway, right=3pt] {compile+load};
+
+% новый поток → Мастер  (правая шина: вправо → вверх → влево)
+\coordinate (bus_x) at (76,-86);
+\draw[Ad, color=CNew!65!black, rounded corners=3pt]
+  (nw.east) -- ++(8,0) -- ++(0,75) -- (mst.east)
+  node[L, pos=0.45, right=3pt] {→ в образ};
+
+% feedback: Мастер → обучение  (левая шина)
+\draw[Ad, color=CLrn!50!black, rounded corners=3pt]
+  (mst.west) -- ++(-8,0) -- ++(0,-22) -- (lrn.north west)
+  node[L, pos=0.45, left=3pt] {feedback};
+
+\end{tikzpicture}
+\end{document}

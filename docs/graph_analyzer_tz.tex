@@ -1,0 +1,713 @@
+% ТЗ: Граф-аналитик — xelatex graph_analyzer_tz.tex
+\documentclass[11pt, a4paper, oneside]{article}
+
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setotherlanguage{english}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+\setmonofont[Scale=0.85]{DejaVu Sans Mono}
+
+\usepackage[
+  a4paper,
+  top=22mm, bottom=22mm,
+  left=28mm, right=22mm,
+  headheight=14pt
+]{geometry}
+
+\usepackage[protrusion=false,expansion=false]{microtype}
+\usepackage{parskip}
+\usepackage{setspace}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+
+\usepackage[dvipsnames, svgnames]{xcolor}
+\definecolor{AccentBlue}{RGB}{25, 90, 160}
+\definecolor{AccentTeal}{RGB}{0, 115, 115}
+\definecolor{AccentOrange}{RGB}{190, 70, 0}
+\definecolor{AccentRed}{RGB}{160, 20, 20}
+\definecolor{AccentGreen}{RGB}{28, 130, 55}
+\definecolor{LightGray}{RGB}{246, 248, 252}
+\definecolor{MidGray}{RGB}{120, 125, 138}
+\definecolor{DarkGray}{RGB}{35, 38, 48}
+\definecolor{CodeBg}{RGB}{244, 246, 252}
+\definecolor{CodeBorder}{RGB}{195, 202, 222}
+
+\usepackage[
+  unicode, colorlinks=true,
+  linkcolor=AccentBlue,
+  urlcolor=AccentTeal,
+  pdftitle={ТЗ: Граф-аналитик процессов},
+  pdfauthor={development\_system}
+]{hyperref}
+
+\lstset{
+  basicstyle=\small\ttfamily\color{DarkGray},
+  backgroundcolor=\color{CodeBg},
+  frame=single, framerule=0.5pt, rulecolor=\color{CodeBorder},
+  breaklines=true, showspaces=false, showstringspaces=false,
+  numbers=left, numberstyle=\tiny\color{MidGray}, numbersep=8pt,
+  xleftmargin=14pt, xrightmargin=4pt,
+  aboveskip=8pt, belowskip=4pt, tabsize=2,
+}
+
+
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{MidGray}\sffamily Граф-аналитик процессов}
+\fancyhead[R]{\small\color{MidGray}\sffamily Техническое задание}
+\fancyfoot[C]{\small\color{MidGray}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{AccentBlue}\leaders\hrule height 0.4pt\hfill}}
+\renewcommand{\footrulewidth}{0pt}
+
+\usepackage{titlesec}
+\titleformat{\section}
+  {\large\bfseries\sffamily\color{AccentBlue}}
+  {\thesection.}{0.7em}{}
+  [\vspace{1pt}{\color{AccentBlue}\rule{\linewidth}{0.5pt}}\vspace{3pt}]
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{DarkGray}}
+  {\thesubsection.}{0.6em}{}
+\titleformat{\subsubsection}
+  {\small\bfseries\color{AccentTeal}}
+  {\thesubsubsection.}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{16pt}{6pt}
+\titlespacing*{\subsection}{0pt}{10pt}{3pt}
+\titlespacing*{\subsubsection}{0pt}{7pt}{2pt}
+
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable, skins}
+
+\newtcolorbox{infobox}[1][]{
+  colback=LightGray, colframe=AccentBlue,
+  colbacktitle=AccentBlue, coltitle=white,
+  fonttitle=\small\bfseries\sffamily,
+  boxrule=0.5pt, arc=3pt, breakable,
+  top=4pt, bottom=4pt, left=6pt, right=6pt, #1}
+
+\newtcolorbox{warnbox}[1][]{
+  colback=Seashell, colframe=AccentOrange,
+  colbacktitle=AccentOrange, coltitle=white,
+  fonttitle=\small\bfseries\sffamily,
+  boxrule=0.5pt, arc=3pt, breakable,
+  top=4pt, bottom=4pt, left=6pt, right=6pt, #1}
+
+\newtcolorbox{okbox}[1][]{
+  colback=Honeydew, colframe=AccentGreen,
+  colbacktitle=AccentGreen, coltitle=white,
+  fonttitle=\small\bfseries\sffamily,
+  boxrule=0.5pt, arc=3pt, breakable,
+  top=4pt, bottom=4pt, left=6pt, right=6pt, #1}
+
+\newtcolorbox{reqbox}[2][]{
+  colback=LightGray, colframe=AccentBlue!40,
+  fontupper=\small,
+  title={\small\sffamily\color{AccentBlue}\textbf{#2}},
+  boxrule=0.4pt, arc=2pt, breakable,
+  top=3pt, bottom=3pt, left=6pt, right=6pt, #1}
+
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\renewcommand{\arraystretch}{1.3}
+\setlength{\parskip}{5pt}
+\setlength{\parindent}{0pt}
+\setlist{nosep, leftmargin=1.4em, topsep=3pt}
+\captionsetup{font=small, labelfont=bf}
+
+% ════════════════════════════════════════════════════════════════
+\begin{document}
+
+% ── Титульная страница ───────────────────────────────────────────
+\begin{titlepage}
+\centering
+\vspace*{18mm}
+
+{\color{AccentBlue}\rule{\textwidth}{1.5pt}}
+\vspace{8mm}
+
+{\sffamily\fontsize{10}{12}\color{MidGray} ТЕХНИЧЕСКОЕ ЗАДАНИЕ}\\[6mm]
+
+{\sffamily\fontsize{22}{28}\bfseries\color{AccentBlue}
+  Граф-аналитик процессов
+}\\[4mm]
+
+{\sffamily\fontsize{13}{16}\color{DarkGray}
+  Инструмент анализа бизнес-процессов:\\
+  поиск крайних случаев, пробелов компенсации\\
+  и неожиданных состояний
+}
+
+\vspace{10mm}
+{\color{AccentBlue}\rule{\textwidth}{0.4pt}}
+\vspace{10mm}
+
+\begin{minipage}{0.85\textwidth}
+\centering\itshape\color{DarkGray}\fontsize{11}{15}\selectfont
+Человек описывает бизнес-процесс в виде Mermaid-графа
+и передаёт ключевые Django-модели. Инструмент использует LLM
+для анализа графа и возвращает структурированный отчёт:
+неожиданные ситуации, крайние случаи, пробелы в компенсации
+и недостижимые ветки — \textbf{до написания кода и тестов}.
+\end{minipage}
+
+\vfill
+
+\begin{tabular}{ll}
+  \textbf{Продукт:}       & Граф-аналитик (поток в development\_system) \\[3pt]
+  \textbf{Версия ТЗ:}     & 1.0 \\[3pt]
+  \textbf{Дата:}          & 14 марта 2026 \\[3pt]
+  \textbf{Стек:}          & Python / Common Lisp, OpenRouter LLM \\[3pt]
+  \textbf{Применение:}    & Анализ add\_tour и аналогичных процессов \\
+\end{tabular}
+
+\vspace{10mm}
+{\color{AccentBlue}\rule{\textwidth}{0.4pt}}
+{\small\color{MidGray}
+  Mermaid · Django ORM · LLM · development\_system · Graph Analysis
+}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ════════════════════════════════════════════════════════════════
+\section{Назначение}
+
+\subsection{Контекст}
+
+При разработке сложных бизнес-процессов (оркестрация задач, многофазные
+транзакции, условные переходы) разработчик описывает логику как граф
+состояний и переходов. Такой граф неизбежно содержит:
+
+\begin{itemize}
+  \item \textbf{Крайние случаи} — входные данные или состояния БД,
+    которые граф не рассматривает явно
+  \item \textbf{Пробелы компенсации} — ветки ошибок, не откатывающие
+    часть уже выполненных шагов
+  \item \textbf{Неожиданные состояния} — комбинации полей модели,
+    нарушающие предположения графа
+  \item \textbf{Недостижимые ветки} — узлы или ветки, до которых
+    алгоритм никогда не доберётся при нормальной работе
+\end{itemize}
+
+Сейчас такой анализ выполняется вручную (code review, опыт команды)
+и пропускает значительную часть проблем до попадания в продакшн.
+
+\subsection{Цель инструмента}
+
+\begin{infobox}[title={Цель}]
+Принять граф процесса (Mermaid) и ключевые Django-модели,
+проанализировать их с помощью LLM и вернуть структурированный
+отчёт о слабых местах \textbf{до написания тестов и кода}.
+\end{infobox}
+
+Инструмент не заменяет code review и не гарантирует полноту анализа.
+Он снижает стоимость обнаружения проблем, перемещая их из фазы тестирования
+в фазу проектирования.
+
+\subsection{Первичный прецедент использования}
+
+Процесс \texttt{add\_tour} — добавление контейнеров в маршрут.
+45 событий, 5 фаз, несколько точек компенсации, версионирование
+контейнеров. Ключевая модель: \texttt{WasteSiteVisitedContainers}.
+
+% ════════════════════════════════════════════════════════════════
+\section{Входные данные}
+
+\subsection{Граф процесса (обязательно)}
+
+Формат: Mermaid \texttt{flowchart}. Требования к графу:
+
+\begin{itemize}
+  \item Узлы имеют идентификаторы (\texttt{A0}, \texttt{B1}, ...)
+  \item Метки узлов описывают действие (например: \texttt{E12 Обновить статус контейнеров})
+  \item Рёбра имеют условия на ветвлениях (\texttt{|"Да"|}, \texttt{|"Нет"|})
+  \item Узлы ошибок явно помечены (\texttt{ERR0}, \texttt{ERR1} или аналог)
+  \item Терминальные узлы обозначены (\texttt{OK}, \texttt{Финиш}, ...)
+\end{itemize}
+
+\begin{lstlisting}[language={}, caption={Пример входного графа (фрагмент)}]
+flowchart TD
+  A6["E6 Проверка зон РО"] --> A6C{"Ок?"}
+  A6C -->|"Нет"| ERR0["Компенсация и ошибка"]
+  A6C -->|"Да"| A7["E7 Проверка совместимости контейнеров с ТС"]
+\end{lstlisting}
+
+\subsection{Django-модели (обязательно)}
+
+Передаются как Python-код: определения классов с полями и их типами.
+Достаточно полей участвующих в процессе — не нужны все поля модели.
+
+\begin{lstlisting}[language=Python, caption={Пример входной модели (фрагмент)}]
+class WasteSiteVisitedContainers(BaseModel):
+    plan = ForeignKey(WasteSiteVisitPlan, ...)
+    container = ForeignKey(Container, ...)
+    status = CharField(choices=ContainerStatus.choices)
+    tour = ForeignKey(Tour, null=True, ...)
+    is_moved = BooleanField(default=False)
+    datetime_update = DateTimeField(...)
+\end{lstlisting}
+
+\subsection{Дополнительный контекст (опционально)}
+
+\begin{itemize}
+  \item Описание бизнес-правил в свободной форме
+  \item Известные ограничения или инварианты
+  \item Примеры проблем из прошлого опыта («раньше ловили баг когда..»)
+\end{itemize}
+
+Дополнительный контекст повышает качество анализа, но не обязателен.
+
+% ════════════════════════════════════════════════════════════════
+\section{Выходной отчёт}
+
+\subsection{Структура}
+
+Отчёт состоит из пяти категорий. Каждая находка содержит:
+ссылку на узел графа, описание проблемы, и рекомендацию.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{cLL}
+  \toprule
+  \textbf{Знак} & \textbf{Категория} & \textbf{Что сюда входит} \\
+  \midrule
+  \texttt{🔴} & Пробел компенсации
+    & Ошибочная ветка не откатывает предыдущие шаги \\
+  \texttt{❗} & Неожиданное состояние
+    & Комбинация полей модели, которую граф не рассматривает \\
+  \texttt{⚠️} & Крайний случай
+    & Граничное входное значение или состояние БД \\
+  \texttt{🟡} & Недостижимая ветка
+    & Узел или ветка, недостижимые при нормальном потоке \\
+  \texttt{ℹ️} & Замечание
+    & Потенциальное улучшение без критичности \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Пример отчёта}
+
+\begin{warnbox}[title={🔴 Пробел компенсации — E20.1–E20.5}]
+  \textbf{Узлы:} E20.1 (закрыть старые версии) → ERR1 (компенсация add\_tour\_task)\\
+  \textbf{Проблема:} К моменту ERR1 шаги E20.1–E20.3 уже выполнены:
+  старые версии контейнеров закрыты, новые созданы, зоны перенесены.
+  Компенсация ERR1 описана как «уведомление об ошибке», но не включает
+  откат версионирования контейнеров.\\
+  \textbf{Рекомендация:} Добавить явный шаг отката E20.x в ветку ERR1,
+  либо документировать что partial state допустим и обрабатывается отдельно.
+\end{warnbox}
+
+\begin{warnbox}[title={❗ Неожиданное состояние — E38.5}]
+  \textbf{Узел:} E38.5 (проверки контейнера: статус плана, тип ТС, assignment, moved)\\
+  \textbf{Проблема:} Поле \texttt{is\_moved=True} при \texttt{status=in\_route}
+  — комбинация теоретически возможна если предыдущий вызов add\_tour завершился
+  частично. Граф предполагает что \texttt{moved} и \texttt{in\_route} взаимоисключают,
+  но инварианта в модели нет.\\
+  \textbf{Рекомендация:} Добавить проверку или constraint в модель.
+\end{warnbox}
+
+\begin{infobox}[title={🟡 Недостижимая ветка — F2}]
+  \textbf{Узел:} F1 → F2 (пересчитать агрегаты source\_tour\_ids)\\
+  \textbf{Проблема:} Путь E25 (только пересортировать планы) ведёт в F0,
+  после чего F1 спрашивает «были контейнеры на перенос?». При пути через E25
+  контейнеров на перенос не было по определению (C3→Нет). Ветка F2 при этом
+  пути никогда не активируется.\\
+  \textbf{Рекомендация:} Уточнить нужен ли пересчёт агрегатов при пути E25→F0.
+\end{infobox}
+
+\subsection{Метрики отчёта}
+
+В конце отчёта — сводная таблица:
+
+\begin{center}
+\begin{tabular}{lrr}
+  \toprule
+  \textbf{Категория} & \textbf{Найдено} & \textbf{Критичных} \\
+  \midrule
+  Пробелы компенсации & 2 & 2 \\
+  Неожиданные состояния & 4 & 1 \\
+  Крайние случаи & 6 & 2 \\
+  Недостижимые ветки & 1 & 0 \\
+  Замечания & 3 & 0 \\
+  \midrule
+  \textbf{Итого} & \textbf{16} & \textbf{5} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ════════════════════════════════════════════════════════════════
+\section{Архитектура}
+
+\subsection{Место в системе}
+
+Инструмент реализуется как поток \texttt{граф-аналитик} в
+\texttt{development\_system} или как standalone Python-скрипт.
+Оба варианта используют одинаковое ядро анализа.
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  \textbf{Вариант} & \textbf{Запуск} & \textbf{Когда использовать} \\
+  \midrule
+  Поток & \texttt{/запустить граф-аналитик <файл>} & интерактивно через Telegram \\
+  Скрипт & \texttt{python analyze.py graph.md models.py} & CI/CD, batch \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Компоненты}
+
+\begin{enumerate}
+  \item \textbf{Парсер графа} — извлекает из Mermaid узлы, рёбра, условия,
+    терминальные и error-узлы. Строит внутренний граф (adjacency list).
+
+  \item \textbf{Парсер моделей} — извлекает из Python-кода классы, поля,
+    типы, choices, null/blank, FK-связи. Строит словарь {модель → поля}.
+
+  \item \textbf{Аналитический движок (LLM)} — получает граф и модели в
+    структурированном промпте, возвращает находки по категориям.
+
+  \item \textbf{Форматтер отчёта} — преобразует JSON-ответ LLM в
+    читаемый текст (Markdown, plain text, или PDF через LaTeX).
+\end{enumerate}
+
+\subsection{Алгоритм анализа}
+
+LLM получает несколько специализированных запросов (не один большой):
+
+\begin{center}
+\begin{tabularx}{\textwidth}{cLL}
+  \toprule
+  \textbf{Шаг} & \textbf{Запрос} & \textbf{Что ищем} \\
+  \midrule
+  1 & Анализ error-веток
+    & Что произошло до ERR-узла? Что нужно откатить? \\
+  2 & Анализ моделей vs граф
+    & Какие комбинации полей граф не рассматривает? \\
+  3 & Анализ граничных входов
+    & Что если containers=[], date в прошлом, ro\_zone=None? \\
+  4 & Анализ достижимости
+    & Есть ли узлы до которых нельзя добраться? \\
+  5 & Синтез
+    & Ранжирование находок по критичности \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+Разбивка на шаги снижает вероятность галлюцинаций: каждый запрос
+сфокусирован, граф не теряется в большом контексте.
+
+\subsection{Промпт-стратегия}
+
+\begin{reqbox}{Системный промпт (схема)}
+Ты — анализатор бизнес-процессов. Тебе дан граф в формате Mermaid
+и Django-модели участвующие в процессе.
+
+Твоя задача: найти [КАТЕГОРИЯ]. Отвечай ТОЛЬКО в формате JSON:
+\{
+  "findings": [
+    \{"node": "E20.1", "category": "compensation\_gap",
+     "description": "...", "recommendation": "...",
+     "severity": "critical|warning|info"\}
+  ]
+\}
+
+Не выдумывай проблемы которых нет. Если всё в порядке — верни пустой список.
+\end{reqbox}
+
+\begin{infobox}[title={Почему отдельные запросы, а не один}]
+Один большой промпт «найди все проблемы» даёт размытые результаты.
+Пять специализированных запросов дают конкретные, проверяемые находки.
+Стоимость: $\approx5 \times 3000$ токенов $\approx \$0.05$ на один анализ.
+\end{infobox}
+
+% ════════════════════════════════════════════════════════════════
+\section{Интерфейс}
+
+\subsection{Telegram-поток}
+
+\begin{lstlisting}[language={}, numbers=none, caption={Пример диалога}]
+> /запустить граф-аналитик
+
+< Пришли Mermaid-граф (или файл .md):
+
+> [прикрепляет add_tour_process_mermaid.md]
+
+< Получен граф: 45 узлов, 5 фаз, 3 error-узла.
+  Теперь пришли Django-модели (Python-код):
+
+> [прикрепляет models.py или вставляет код]
+
+< Анализирую... (5 запросов к LLM)
+
+< 📊 Отчёт: add_tour_process
+  🔴 Пробелы компенсации: 2 (критичных: 2)
+  ❗ Неожиданные состояния: 4 (критичных: 1)
+  ⚠️  Крайние случаи: 6 (критичных: 2)
+  🟡 Недостижимые ветки: 1
+  ℹ️  Замечания: 3
+  Итого критичных: 5
+
+  [детальный отчёт ниже]
+\end{lstlisting}
+
+\subsection{Команды}
+
+\begin{center}
+\begin{tabular}{lp{9cm}}
+  \toprule
+  \textbf{Команда} & \textbf{Описание} \\
+  \midrule
+  \texttt{граф-аналитик <граф>} & Только граф, без моделей (упрощённый анализ) \\
+  \texttt{граф-аналитик <граф> <модели>} & Полный анализ \\
+  \texttt{граф-аналитик --категория компенсация} & Только одна категория \\
+  \texttt{граф-аналитик --pdf} & Вернуть отчёт как PDF \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ════════════════════════════════════════════════════════════════
+\section{Реализация}
+
+\subsection{Парсер Mermaid}
+
+Граф парсится регулярными выражениями — полный Mermaid-парсер не нужен,
+достаточно извлечь узлы и рёбра из \texttt{flowchart}:
+
+\begin{lstlisting}[language=Python, caption={Парсер графа}]
+import re
+from dataclasses import dataclass, field
+from typing import Optional
+
+@dataclass
+class Node:
+    id: str
+    label: str
+    is_error: bool = False
+    is_terminal: bool = False
+    is_decision: bool = False
+
+@dataclass
+class Edge:
+    from_id: str
+    to_id: str
+    condition: Optional[str] = None
+
+def parse_mermaid(text: str) -> tuple[dict[str, Node], list[Edge]]:
+    nodes, edges = {}, []
+
+    # Узлы: A0["E1 Текст"] или A0{"Вопрос?"} или A0(["Текст"])
+    for m in re.finditer(r'(\w+)\[\"([^\"]+)\"\]', text):
+        nid, label = m.group(1), m.group(2)
+        nodes[nid] = Node(
+            id=nid, label=label,
+            is_error='ERR' in nid or 'ошибк' in label.lower(),
+            is_terminal='финиш' in label.lower() or 'completed' in label.lower(),
+        )
+    for m in re.finditer(r'(\w+)\{\"([^\"]+)\"\}', text):
+        nid, label = m.group(1), m.group(2)
+        nodes[nid] = Node(id=nid, label=label, is_decision=True)
+
+    # Рёбра: A --> B или A -->|"условие"| B
+    for m in re.finditer(r'(\w+)\s*-->(?:\|"([^\"]+)"\|)?\s*(\w+)', text):
+        edges.append(Edge(m.group(1), m.group(3), m.group(2)))
+
+    return nodes, edges
+\end{lstlisting}
+
+\subsection{Парсер моделей}
+
+\begin{lstlisting}[language=Python, caption={Парсер Django-моделей}]
+import ast
+
+def parse_models(source: str) -> dict[str, list[dict]]:
+    """Извлекает {ClassName: [{name, type, kwargs}]} из Python-кода."""
+    tree = ast.parse(source)
+    result = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        fields = []
+        for stmt in node.body:
+            if not isinstance(stmt, ast.Assign):
+                continue
+            for target in stmt.targets:
+                if not isinstance(target, ast.Name):
+                    continue
+                fields.append({
+                    'name': target.id,
+                    'type': ast.unparse(stmt.value)
+                })
+        if fields:
+            result[node.name] = fields
+    return result
+\end{lstlisting}
+
+\subsection{Аналитический движок}
+
+\begin{lstlisting}[language=Python, caption={Запрос к LLM (один шаг)}]
+import json, httpx, os
+
+PROMPTS = {
+    'compensation': """
+Граф процесса (Mermaid):
+{graph}
+
+Django-модели:
+{models}
+
+Найди пробелы в компенсации ошибок: случаи когда error-ветка
+(ERR-узлы) не откатывает шаги уже выполненные до неё.
+Отвечай JSON: {{"findings": [{{"node":"...", "description":"...",
+"recommendation":"...", "severity":"critical|warning"}}]}}
+""",
+    'edge_cases': """...""",
+    'model_states': """...""",
+    'reachability': """...""",
+}
+
+def analyze_step(step: str, graph: str, models: str) -> list[dict]:
+    prompt = PROMPTS[step].format(graph=graph, models=models)
+    resp = httpx.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"},
+        json={"model": "anthropic/claude-opus-4-5",
+              "messages": [{"role": "user", "content": prompt}]},
+        timeout=60,
+    ).json()
+    content = resp['choices'][0]['message']['content']
+    # Извлечь JSON из ответа
+    m = re.search(r'\{.*\}', content, re.DOTALL)
+    return json.loads(m.group())['findings'] if m else []
+
+def analyze(graph_text: str, models_text: str) -> dict:
+    all_findings = []
+    for step in PROMPTS:
+        all_findings.extend(analyze_step(step, graph_text, models_text))
+    return {
+        'total': len(all_findings),
+        'critical': sum(1 for f in all_findings if f.get('severity') == 'critical'),
+        'findings': all_findings,
+    }
+\end{lstlisting}
+
+\subsection{Структура файлов}
+
+\begin{lstlisting}[language={}, numbers=none]
+development_system/
+  мастер/потоки/
+    граф-аналитик.lisp     ← поток (обёртка над Python)
+  tools/
+    graph_analyzer/
+      __init__.py
+      parser.py             ← parse_mermaid, parse_models
+      analyzer.py           ← analyze(), analyze_step()
+      prompts.py            ← все промпты
+      formatter.py          ← форматирование отчёта
+      cli.py                ← python -m graph_analyzer <файлы>
+\end{lstlisting}
+
+% ════════════════════════════════════════════════════════════════
+\section{Критерии приёмки}
+
+\subsection{Функциональные}
+
+\begin{enumerate}
+  \item Принимает граф add\_tour (45 узлов) и находит
+    \textbf{не менее 3 реальных проблем}, подтверждённых разработчиком
+  \item Каждая находка содержит ссылку на конкретный узел графа
+  \item Отчёт возвращается за \textbf{не более 60 секунд}
+  \item Работает без дополнительного контекста (только граф + модели)
+  \item Ложноположительные находки \textbf{не более 30\%} от общего числа
+\end{enumerate}
+
+\subsection{Нефункциональные}
+
+\begin{enumerate}
+  \item Стоимость одного анализа \textbf{не более \$0.10} (OpenRouter)
+  \item Запуск из Telegram одной командой
+  \item Результат читается без технических знаний о промптах
+\end{enumerate}
+
+\subsection{Не входит в v1}
+
+\begin{itemize}
+  \item Генерация тестов (этап 2, отдельное ТЗ)
+  \item Анализ кода реализации (только граф и модели)
+  \item Сохранение истории анализов
+  \item Сравнение двух версий графа
+\end{itemize}
+
+% ════════════════════════════════════════════════════════════════
+\section{Риски}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{lLl}
+  \toprule
+  \textbf{Риск} & \textbf{Описание} & \textbf{Митигация} \\
+  \midrule
+  Галлюцинации LLM
+    & Находки которых нет в реальности
+    & Разработчик проверяет каждую; порог ЛП \textless 30\% \\
+  Большой граф
+    & 45+ узлов перегружают контекст
+    & Анализ пофазно: каждая subgraph отдельно \\
+  Неполные модели
+    & Пользователь не передал все поля
+    & Инструмент явно сообщает каких полей не хватает \\
+  Стоимость
+    & Частые запуски дорожают
+    & Кэш результатов по хешу входа \\
+  \bottomrule
+\end{tabularx}
+\end{center}
+
+% ════════════════════════════════════════════════════════════════
+\section{Открытые вопросы}
+
+\begin{enumerate}
+  \item \textbf{Модель LLM:} claude-opus-4-5 даёт лучшее качество,
+    gpt-4.1 — дешевле. Решить по результатам первого прогона на add\_tour.
+  \item \textbf{Язык реализации:} Python (проще интеграция с Django),
+    или CL-поток (нативен для development\_system). Рекомендация: Python-скрипт
+    + тонкая CL-обёртка для вызова из Telegram.
+  \item \textbf{Формат отчёта:} plain text в Telegram достаточен для v1,
+    PDF — для v2.
+  \item \textbf{Фазный анализ:} анализировать граф целиком или пофазно
+    (по subgraph)? Пофазно дешевле и точнее — но требует маппинга фаз.
+\end{enumerate}
+
+% ════════════════════════════════════════════════════════════════
+\section{Следующий шаг}
+
+\begin{okbox}[title={MVP за 1 день}]
+\begin{enumerate}
+  \item Python-скрипт \texttt{analyze.py}: парсер Mermaid + 2 промпта
+    (компенсация + крайние случаи)
+  \item Прогнать на add\_tour + WasteSiteVisitedContainers
+  \item Сравнить находки с реальными проблемами известными команде
+  \item Если точность \textgreater 50\% — добавить остальные 3 промпта
+\end{enumerate}
+\end{okbox}
+
+\vfill
+\hrule
+\vspace{4mm}
+{\small\color{MidGray}
+  ТЗ v1.0 · 14~марта~2026 · development\_system ·
+  Следующий документ: ТЗ на генератор тестов (этап~2)
+}
+
+\end{document}

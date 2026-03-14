@@ -60,16 +60,49 @@
           (send-message chat-id текст :reply-markup markup)))
       (send-message chat-id "Доступ запрещён.")))
 
+;; ─── обработка входящих документов ──────────────────────────────────────────
+
+(defparameter *входящие-файлы* (make-hash-table :test #'equal)
+  "chat-id → путь к последнему скачанному файлу.")
+
+(defun %обр-документ (chat-id msg)
+  "Скачать документ, предложить запустить граф-аналитик."
+  (let* ((doc      (cdr (assoc :document msg)))
+         (file-id  (cdr (assoc :file--id doc)))
+         (fname    (or (cdr (assoc :file--name doc)) "файл.md"))
+         (local    (format nil "/tmp/мастер-doc-~A-~A"
+                           (get-universal-time) fname)))
+    (send-message chat-id (format nil "⬇️ Скачиваю ~A..." fname))
+    (if (fetch-document file-id local)
+        (progn
+          (setf (gethash chat-id *входящие-файлы*) local)
+          (send-message chat-id
+                        (format nil "✅ Сохранён: ~A~%~%Запустить граф-аналитик?" fname)
+                        :reply-markup
+                        (make-inline-keyboard
+                         (list (list
+                                (cons "▶️ Анализировать" (format nil "/запустить граф-аналитик ~A" local))
+                                (cons "❌ Отмена" "/отмена"))))))
+        (send-message chat-id "❌ Не удалось скачать файл."))))
+
 (defun обработать-update (upd)
   (cond
     ((assoc :message upd)
      (let* ((msg  (cdr (assoc :message upd)))
-            (text (cdr (assoc :text msg))))
-       (when (stringp text)
-         (%dispatch (%chat-id-of msg) text))))
+            (text (cdr (assoc :text msg)))
+            (cid  (%chat-id-of msg)))
+       (cond
+         ;; Текстовое сообщение
+         ((stringp text)
+          (%dispatch cid text))
+         ;; Документ (файл)
+         ((assoc :document msg)
+          (when (or (null *admin-chat-id*) (= cid *admin-chat-id*))
+            (%обр-документ cid msg))))))
     ((assoc :callback--query upd)
      (let* ((cb   (cdr (assoc :callback--query upd)))
             (cid  (%chat-id-of (cdr (assoc :message cb))))
             (data (cdr (assoc :data cb))))
        (answer-callback-query (cdr (assoc :id cb)))
-       (%dispatch cid data)))))
+       (unless (string= data "/отмена")
+         (%dispatch cid data))))))

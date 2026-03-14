@@ -1,0 +1,1035 @@
+%% paper2.tex — Development System: архитектура многопотоковой LLM-системы
+%% Компиляция: lualatex paper2.tex
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setmonofont[Scale=0.88]{DejaVu Sans Mono}
+
+\usepackage{geometry}
+\geometry{
+  a4paper,
+  top=25mm, bottom=25mm,
+  left=28mm, right=28mm,
+  headsep=10mm
+}
+
+\usepackage{polyglossia}
+\setmainlanguage{russian}
+\setotherlanguage{english}
+
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{amsmath}
+
+% ─── листинги ────────────────────────────────────────────────────────────────
+\usepackage{listings}
+
+\definecolor{clbg}{HTML}{F8F8F2}
+\definecolor{clcomment}{HTML}{6A9955}
+\definecolor{clkeyword}{HTML}{569CD6}
+\definecolor{clstring}{HTML}{CE9178}
+\definecolor{clparen}{HTML}{999999}
+\definecolor{clbuiltin}{HTML}{DCDCAA}
+\definecolor{clpackage}{HTML}{4EC9B0}
+
+\lstdefinelanguage{CommonLisp}{
+  morekeywords={defun,defpackage,defvar,defparameter,defmacro,defstruct,
+                let,let*,labels,flet,lambda,cond,when,unless,case,
+                progn,handler-case,handler-bind,restart-case,ignore-errors,
+                loop,do,dolist,dotimes,mapcar,mapc,reduce,remove-if,
+                format,write,read,load,require,
+                in-package,use-package,export,import,
+                setf,setq,push,pop,incf,decf,
+                values,multiple-value-bind,
+                and,or,not,null,if,t,nil,
+                car,cdr,cons,list,append,reverse,length,
+                with-open-file,with-output-to-string,
+                error,warn,signal,funcall,apply,
+                string=,string-upcase,find-symbol,find-package,fboundp,
+                pathname,merge-pathnames,probe-file,ensure-directories-exist,
+                sb-ext:exit,sb-ext:posix-getenv,uiop:getenv,uiop:run-program,
+                asdf:defsystem,asdf:load-system,ql:quickload},
+  sensitive=false,
+  morecomment=[l]{;},
+  morecomment=[s]{\#|}{|\#},
+  morestring=[b]",
+}
+
+\lstset{
+  language=CommonLisp,
+  backgroundcolor=\color{clbg},
+  basicstyle=\footnotesize\ttfamily,
+  keywordstyle=\color{clkeyword}\bfseries,
+  commentstyle=\color{clcomment}\itshape,
+  stringstyle=\color{clstring},
+  frame=single,
+  framesep=4pt,
+  rulecolor=\color{gray!30},
+  showstringspaces=false,
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=2,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+  xleftmargin=18pt,
+  xrightmargin=4pt,
+  captionpos=b,
+  literate=
+    {←}{{$\leftarrow$}}1
+    {→}{{$\rightarrow$}}1,
+}
+
+\lstnewenvironment{lispcode}[1][]
+  {\lstset{language=CommonLisp,#1}}
+  {}
+
+% ─── оформление ──────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=blue!60!black,
+  citecolor=black
+}
+
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection.}{0.5em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{Development System: архитектура LLM-системы на Common Lisp}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ─── документ ────────────────────────────────────────────────────────────────
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\LARGE\bfseries Development System\\[0.4em]
+\large Архитектура многопотоковой LLM-системы\\
+с персистентным образом на Common Lisp}
+
+\vspace{1.5cm}
+{\large Артемий Уродовских}\\[0.3em]
+{\normalsize 2026}
+
+\vspace{2cm}
+\begin{abstract}
+\noindent
+Статья описывает \textbf{Development System} — двухкомпонентную систему для оркестрации вычислительных потоков с языковой моделью в роли исполнителя.
+Система состоит из \textit{Мастера} — Telegram-бота, написанного на Common Lisp и принимающего команды, — и \textit{Подмастерья} — персистентного SBCL-образа, в который потоки загружаются динамически без перезапуска процесса.
+
+Ключевая идея: поток — это автономный модуль Common Lisp, определяющий единственную функцию \texttt{выполнить/1}. Мастер знает, как потоки запускать и комбинировать; Подмастерье знает, как они загружаются в живой образ и вызываются напрямую, минуя subprocess-оверхед.
+
+Особого внимания заслуживает \textit{поток-порождатель} — поток, который с помощью LLM генерирует новые потоки, компилирует их и загружает в тот же образ, тем самым замыкая метациркулярную петлю исполнения.
+
+Система полностью мигрирована с Racket на Common Lisp. Общий объём кодовой базы — около 1100 строк, система проходит 6 smoke-тестов.
+\end{abstract}
+
+\vspace{1cm}
+\noindent\textbf{Ключевые слова:} Common Lisp, SBCL, языковые модели, Telegram-бот, динамическая загрузка кода, персистентный образ, метациркулярность
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Введение}
+
+Системы, управляемые языковыми моделями, обычно строятся вокруг одного из двух паттернов: либо LLM вызывается синхронно как функция («ответь на вопрос»), либо запускается автономный агент с инструментами. Оба подхода предполагают, что вычислительная единица — это HTTP-вызов к API.
+
+\textit{Development System} предлагает иную структуру: \textbf{поток} (\textit{stream}) — это скомпилированный модуль Common Lisp, работающий в одном долгоживущем процессе SBCL. Взаимодействие с пользователем происходит через Telegram-бот. Внутри — оркестратор и исполнитель, разделённые по ответственности, но работающие в одном языке.
+
+Переход с Racket на Common Lisp продиктован прагматическими соображениями:
+\begin{itemize}[noitemsep]
+  \item SBCL поддерживает горячую замену кода (\texttt{load}) в живом процессе без перезапуска;
+  \item Common Lisp предоставляет мощную систему условий (\textit{condition system}) для структурированной обработки ошибок;
+  \item Единый язык в стеке снижает когнитивную нагрузку: не нужно переключаться между Racket-семантикой в оркестраторе и CL-семантикой в исполнителе;
+  \item Racket-процесс нестабильно завершался при зависших HTTP-соединениях — \texttt{user break} прерывал poll-loop.
+\end{itemize}
+
+\subsection{Структура статьи}
+
+Раздел~\ref{sec:arch} описывает общую архитектуру. Раздел~\ref{sec:master} — Мастер: Telegram API, роутинг команд, управление состоянием. Раздел~\ref{sec:apprentice} — Подмастерье: персистентный образ и загрузка потоков. Раздел~\ref{sec:spawner} — метациркулярный порождатель. Раздел~\ref{sec:tracer} — механизм трассировки. Раздел~\ref{sec:design} разбирает ключевые архитектурные решения. Раздел~\ref{sec:conclusion} — заключение.
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Архитектура системы}
+\label{sec:arch}
+
+\subsection{Компоненты}
+
+Система состоит из двух SBCL-процессов и набора файлов-потоков (рис.~\ref{fig:arch}).
+
+\begin{figure}[H]
+\centering
+\small
+\begin{verbatim}
+Telegram API
+     │
+     ▼
+┌──────────────────────────────────────────────────┐
+│  МАСТЕР  (мастер/cl/)                            │
+│  SBCL-процесс #1                                 │
+│  - poll-loop: long-polling Telegram              │
+│  - роутинг команд: /породить /запустить ...      │
+│  - душа, история диалогов, комбинирование        │
+└──────────────────────────────────────────────────┘
+         │ load .lisp
+         ▼
+┌──────────────────────────────────────────────────┐
+│  мастер/потоки/                                  │
+│  *.lisp — файлы потоков                          │
+│  порождатель.lisp  эхо.lisp  уточнение.lisp      │
+│  питон.lisp        реакт.lisp                    │
+└──────────────────────────────────────────────────┘
+         │ load .lisp (общий каталог)
+         ▼
+┌──────────────────────────────────────────────────┐
+│  ПОДМАСТЕРЬЕ  (подмастерье/)                     │
+│  SBCL-процесс #2                                 │
+│  - персистентный образ                           │
+│  - загружает потоки при первом обращении         │
+│  - вызывает (выполнить задача) напрямую          │
+└──────────────────────────────────────────────────┘
+\end{verbatim}
+\caption{Архитектура Development System}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Файловая структура}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Путь} & \textbf{Язык} & \textbf{Роль} \\
+\midrule
+\texttt{мастер/cl/мастер.asd}     & ASDF  & Определение системы \\
+\texttt{мастер/cl/packages.lisp}  & CL    & Пакет \texttt{:мастер} \\
+\texttt{мастер/cl/config.lisp}    & CL    & Переменные окружения \\
+\texttt{мастер/cl/telegram.lisp}  & CL    & HTTP-клиент Telegram \\
+\texttt{мастер/cl/llm.lisp}       & CL    & HTTP-клиент OpenRouter \\
+\texttt{мастер/cl/dusha.lisp}     & CL    & Личность бота (soul) \\
+\texttt{мастер/cl/история.lisp}   & CL    & История диалогов \\
+\texttt{мастер/cl/потоки.lisp}    & CL    & Управление потоками \\
+\texttt{мастер/cl/комбо.lisp}     & CL    & Комбинирование потоков \\
+\texttt{мастер/cl/команды.lisp}   & CL    & Обработчики команд \\
+\texttt{мастер/cl/main.lisp}      & CL    & Poll-loop, точка входа \\
+\texttt{подмастерье/main.lisp}    & CL    & Персистентный исполнитель \\
+\texttt{подмастерье/исполнитель.lisp} & CL & Загрузка и запуск потоков \\
+\texttt{подмастерье/tracer.lisp}  & CL    & Трассировка вычислений \\
+\texttt{мастер/потоки/*.lisp}     & CL    & Вычислительные потоки \\
+\bottomrule
+\end{tabular}
+\caption{Файловая структура Development System}
+\end{table}
+
+\subsection{Контракт потока}
+
+Каждый поток — это обычный CL-файл, соответствующий одному контракту:
+
+\begin{lispcode}[caption={Контракт вычислительного потока}]
+(defpackage :поток-ИМЯ
+  (:use :cl)
+  (:export #:выполнить))
+
+(in-package :поток-ИМЯ)
+
+(defun выполнить (задача)
+  ;; задача — строка
+  ;; возвращает строку-результат
+  ...)
+\end{lispcode}
+
+Соглашение предельно простое: один пакет, одна экспортируемая функция. Это позволяет как Мастеру, так и Подмастерью находить точку входа через \texttt{find-symbol}:
+
+\begin{lispcode}[caption={Поиск точки входа через рефлексию}]
+(defun %найти-выполнить (имя)
+  (let ((pkg (find-package (string-upcase имя))))
+    (when pkg
+      (let ((sym (find-symbol "ВЫПОЛНИТЬ" pkg)))
+        (when (and sym (fboundp sym))
+          (symbol-function sym))))))
+\end{lispcode}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Мастер: Telegram-оркестратор}
+\label{sec:master}
+
+\subsection{ASDF-система и пакет}
+
+Мастер оформлен как полноценная ASDF-система с явным списком зависимостей и порядком загрузки файлов:
+
+\begin{lispcode}[caption={мастер/cl/мастер.asd}]
+(asdf:defsystem #:мастер
+  :description "Telegram bot / orchestrator"
+  :depends-on (#:dexador #:cl-json)
+  :serial t
+  :components ((:file "packages")
+               (:file "config")
+               (:file "telegram")
+               (:file "llm")
+               (:file "dusha")
+               (:file "история")
+               (:file "потоки")
+               (:file "комбо")
+               (:file "команды")
+               (:file "main")))
+\end{lispcode}
+
+Ключ \texttt{:serial t} гарантирует, что файлы компилируются в порядке объявления. Это важно: \texttt{команды.lisp} вызывает функции из \texttt{потоки.lisp} и \texttt{история.lisp}, которые должны быть скомпилированы раньше.
+
+Пакет \texttt{:мастер} экспортирует все публичные точки входа:
+
+\begin{lispcode}[caption={мастер/cl/packages.lisp}]
+(defpackage #:мастер
+  (:use #:cl #:uiop)
+  (:nicknames #:м)
+  (:export
+   #:start #:poll-loop
+   #:обработать-команду #:обработать-update
+   #:читать-душу #:писать-душу #:душа->системный-промпт
+   #:llm-complete
+   #:get-updates #:send-message #:send-document
+   #:answer-callback-query #:make-inline-keyboard
+   #:загрузить-историю #:сохранить-историю
+   #:добавить-сообщение #:очистить-историю
+   #:список-потоков #:загрузить-поток
+   #:загрузить-все-потоки #:запустить-поток
+   #:активные-потоки #:комбинировать))
+\end{lispcode}
+
+\subsection{Telegram HTTP-клиент}
+
+Telegram Bot API работает через HTTPS с JSON-телом запроса. Мастер использует \texttt{dexador} — современную CL-библиотеку для HTTP:
+
+\begin{lispcode}[caption={мастер/cl/telegram.lisp — ядро HTTP-клиента}]
+(defun api-url (method)
+  (concatenate 'string *telegram-api-base* *токен* "/" method))
+
+(defun api-post (method payload)
+  "POST JSON payload к Telegram API.
+  Возвращает распарсенный alist или nil."
+  (handler-case
+      (let* ((body (cl-json:encode-json-to-string payload))
+             (resp (dexador:post (api-url method)
+                                 :content body
+                                 :headers '(("Content-Type"
+                                             . "application/json")))))
+        (cl-json:decode-json-from-string resp))
+    (error (e)
+      (format *error-output* "[telegram] ошибка ~A: ~A~%" method e)
+      nil)))
+\end{lispcode}
+
+Примечательно: вся обработка ошибок сводится к одному \texttt{handler-case}. При любом сбое (таймаут, 4xx, 5xx) функция возвращает \texttt{nil} вместо сигнала условия. Это осознанный выбор: poll-loop должен быть устойчивым к сетевым флуктуациям.
+
+Long-polling реализован через параметр \texttt{timeout=30} в \texttt{getUpdates}:
+
+\begin{lispcode}[caption={мастер/cl/telegram.lisp — long-poll}]
+(defun get-updates (&key (timeout 30) offset)
+  "Long-poll Telegram. Возвращает список update-alist или nil."
+  (let* ((params (append `((:timeout . ,timeout))
+                         (when offset `((:offset . ,offset)))))
+         (resp (api-post "getUpdates" params)))
+    (when resp (cdr (assoc :result resp)))))
+\end{lispcode}
+
+Telegram удерживает соединение до 30 секунд, если нет новых сообщений, затем возвращает пустой массив. Это значительно снижает количество запросов по сравнению с short-polling.
+
+\subsection{Главный цикл}
+
+Poll-loop реализован через хвостовую рекурсию. В Common Lisp хвостовая рекурсия не гарантируется стандартом, но SBCL оптимизирует её при включённой скорости:
+
+\begin{lispcode}[caption={мастер/cl/main.lisp — рекурсивный poll-loop}]
+(defun poll-loop (offset)
+  (when *polling*
+    (handler-case
+        (let* ((updates (get-updates :offset offset :timeout 30))
+               (max-id offset))
+          (dolist (upd (or updates '()))
+            (let ((id (cdr (assoc :update--id upd))))
+              (when (and id (> id max-id))
+                (setf max-id id)))
+            (ignore-errors (обработать-update upd)))
+          (poll-loop
+            (if (> max-id offset) (1+ max-id) offset)))
+      (error (e)
+        (format *error-output*
+                "[мастер] ошибка в poll-loop: ~A~%" e)
+        (sleep 2)
+        (poll-loop offset)))))
+\end{lispcode}
+
+Offset-управление следует протоколу Telegram: следующий запрос отправляется с \texttt{offset = max\_update\_id + 1}, что подтверждает получение всех предыдущих сообщений.
+
+Обработка входящих update-ов диспетчеризируется по типу: сообщение (\texttt{:message}) или callback от inline-кнопки (\texttt{:callback--query}):
+
+\begin{lispcode}[caption={мастер/cl/main.lisp — dispatch по типу update}]
+(defun обработать-update (update)
+  (cond
+    ((assoc :message update)
+     (let* ((msg     (cdr (assoc :message update)))
+            (chat    (cdr (assoc :chat msg)))
+            (chat-id (cdr (assoc :id chat)))
+            (text    (cdr (assoc :text msg))))
+       (when (stringp text)
+         (send-message chat-id
+           (обработать-команду chat-id text)))))
+    ((assoc :callback--query update)
+     (let* ((cb      (cdr (assoc :callback--query update)))
+            (chat-id (cdr (assoc :id
+                            (cdr (assoc :chat
+                              (cdr (assoc :message cb)))))))
+            (data    (cdr (assoc :data cb))))
+       (answer-callback-query (cdr (assoc :id cb)))
+       (send-message chat-id
+         (обработать-команду chat-id data))))))
+\end{lispcode}
+
+Заметим двойное дефисирование в ключах (\texttt{:update--id}, \texttt{:callback--query}): это особенность \texttt{cl-json}, который конвертирует \texttt{snake\_case} JSON-ключи в символы CL, заменяя подчёркивания двойными дефисами.
+
+\subsection{Роутинг команд}
+
+Команды хранятся в \texttt{assoc}-таблице: символ команды → функция-обработчик. Это классический паттерн «dispatch table»:
+
+\begin{lispcode}[caption={мастер/cl/команды.lisp — dispatch table}]
+(defparameter *команды*
+  (list (cons "/старт"       #'%обр-старт)
+        (cons "/start"       #'%обр-старт)
+        (cons "/потоки"      #'%обр-потоки)
+        (cons "/запустить"   #'%обр-запустить)
+        (cons "/остановить"  #'%обр-остановить)
+        (cons "/переключить" #'%обр-переключить)
+        (cons "/состояние"   #'%обр-состояние)
+        (cons "/породить"    #'%обр-породить)
+        (cons "/диалог"      #'%обр-диалог)
+        (cons "/сбросить"    #'%обр-сбросить)))
+
+(defun обработать-команду (chat-id text)
+  (multiple-value-bind (cmd args) (%cmd-args text)
+    (let ((fn (cdr (assoc cmd *команды* :test #'string=))))
+      (if fn
+          (handler-case (funcall fn chat-id args)
+            (error (e) (format nil "Ошибка: ~A" e)))
+          (format nil "Неизвестная команда: ~A" cmd)))))
+\end{lispcode}
+
+Парсинг строки команды выполняется самостоятельно, без внешних библиотек:
+
+\begin{lispcode}[caption={мастер/cl/команды.lisp — разбор строки команды}]
+(defun %split-words (str)
+  (let ((result '())
+        (cur (make-array 0 :element-type 'character
+                           :adjustable t :fill-pointer 0)))
+    (loop for ch across str do
+      (if (char= ch #\Space)
+          (when (plusp (length cur))
+            (push (copy-seq cur) result)
+            (setf (fill-pointer cur) 0))
+          (vector-push-extend ch cur)))
+    (when (plusp (length cur))
+      (push (copy-seq cur) result))
+    (nreverse result)))
+\end{lispcode}
+
+\subsection{Управление состоянием: душа, история, потоки}
+
+\subsubsection{Душа (Soul)}
+
+«Душа» — это S-выражение в файле \texttt{душа.scm}, определяющее личность бота: имя, описание, стиль, инструкции. Файл читается стандартным \texttt{read}:
+
+\begin{lispcode}[caption={мастер/cl/dusha.lisp}]
+(defun читать-душу (путь)
+  (with-open-file (in путь :direction :input)
+    (read in)))
+
+(defun писать-душу (душа путь)
+  (with-open-file (out путь :direction :output
+                   :if-exists :supersede
+                   :if-does-not-exist :create)
+    (let ((*print-pretty* t))
+      (prin1 душа out))))
+
+(defun душа->системный-промпт (душа)
+  (let ((имя         (getf душа :имя))
+        (описание    (getf душа :описание))
+        (стиль       (getf душа :стиль))
+        (инструкции  (getf душа :инструкции)))
+    (format nil "Имя: ~a~%Описание: ~a~%Стиль: ~a~%~
+                 Инструкции: ~a"
+            имя описание стиль инструкции)))
+\end{lispcode}
+
+Формат \texttt{душа.scm} — это plist:
+\begin{verbatim}
+(:имя "Мастер" :описание "Оркестратор потоков"
+ :стиль "лаконичный" :инструкции "Отвечай кратко и по делу.")
+\end{verbatim}
+
+\subsubsection{История диалогов}
+
+История хранится в \texttt{история/<chat-id>.json} и представляет собой список сообщений в формате OpenAI (\texttt{role}/\texttt{content}):
+
+\begin{lispcode}[caption={мастер/cl/история.lisp}]
+(defun %путь-истории (chat-id)
+  (merge-pathnames (format nil "~A.json" chat-id)
+                   *каталог-истории*))
+
+(defun добавить-сообщение (chat-id role content)
+  (let* ((история (or (загрузить-историю chat-id) '()))
+         (новая (append история
+                  (list `((:role . ,role)
+                          (:content . ,content))))))
+    (сохранить-историю chat-id новая)
+    новая))
+
+(defun загрузить-историю (chat-id)
+  (let ((файл (%путь-истории chat-id)))
+    (when (probe-file файл)
+      (handler-case
+          (cl-json:decode-json-from-string
+           (uiop:read-file-string файл))
+        (error () nil)))))
+\end{lispcode}
+
+\subsubsection{Управление потоками}
+
+Состояние активных потоков хранится в \texttt{hash-table}. Поиск функции \texttt{выполнить} реализован через рефлексию — \texttt{find-package} и \texttt{find-symbol}:
+
+\begin{lispcode}[caption={мастер/cl/потоки.lisp}]
+(defparameter *активные-потоки*
+  (make-hash-table :test #'equal))
+
+(defun список-потоков ()
+  (mapcar #'pathname-name
+    (directory (merge-pathnames "*.lisp" *каталог-потоков*))))
+
+(defun %найти-выполнить (имя)
+  (let ((pkg (find-package (string-upcase имя))))
+    (when pkg
+      (let ((sym (find-symbol "ВЫПОЛНИТЬ" pkg)))
+        (when (and sym (fboundp sym))
+          (symbol-function sym))))))
+
+(defun запустить-поток (имя задача)
+  (let* ((путь (merge-pathnames (format nil "~A.lisp" имя)
+                                *каталог-потоков*)))
+    (when (probe-file путь)
+      (загрузить-поток путь)
+      (let ((fn (%найти-выполнить имя)))
+        (when fn
+          (setf (gethash имя *активные-потоки*) t)
+          (funcall fn задача))))))
+\end{lispcode}
+
+\subsubsection{Комбинирование потоков}
+
+Функция \texttt{комбинировать} поддерживает два режима: последовательный (pipeline) и параллельный:
+
+\begin{lispcode}[caption={мастер/cl/комбо.lisp}]
+(defun %join (sep strings)
+  (reduce (lambda (a b) (concatenate 'string a sep b))
+          strings :initial-value ""))
+
+(defun комбинировать (потоки задача &key параллельно)
+  (if параллельно
+      (%join "\n---\n"
+             (mapcar (lambda (имя)
+                       (or (ignore-errors
+                             (запустить-поток имя задача))
+                           ""))
+                     потоки))
+      (reduce (lambda (вход имя)
+                (or (ignore-errors
+                      (запустить-поток имя вход))
+                    вход))
+              потоки :initial-value задача)))
+\end{lispcode}
+
+В последовательном режиме \texttt{reduce} элегантно реализует pipeline: результат каждого потока становится входом следующего.
+
+\subsection{LLM-клиент}
+
+Запросы к языковой модели через OpenRouter:
+
+\begin{lispcode}[caption={мастер/cl/llm.lisp}]
+(defun llm-complete (prompt &key (model *openrouter-model*)
+                               system messages)
+  (let* ((msgs (append
+                 (when system
+                   (list `(("role" . "system")
+                           ("content" . ,system))))
+                 (if messages messages
+                     (list `(("role" . "user")
+                             ("content" . ,prompt))))))
+         (body (cl-json:encode-json-to-string
+                 `(("model" . ,model) ("messages" . ,msgs))))
+         (headers `(("Authorization" . ,(format nil "Bearer ~a"
+                                         *openrouter-key*))
+                    ("Content-Type" . "application/json")))
+         (resp (dexador:post *openrouter-api-url*
+                :content body :headers headers))
+         (json (ignore-errors
+                 (cl-json:decode-json-from-string resp)))
+         (choices (cdr (assoc :choices json))))
+    (if (and choices (consp choices))
+        (let ((msg (cdr (assoc :message (first choices)))))
+          (or (cdr (assoc :content msg)) "[нет ответа]"))
+        "[нет ответа]")))
+\end{lispcode}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Подмастерье: персистентный исполнитель}
+\label{sec:apprentice}
+
+\subsection{Концепция персистентного образа}
+
+Традиционный подход к выполнению кода по запросу — запуск нового процесса на каждый вызов. Это удобно с точки зрения изоляции, но дорого: SBCL стартует около 400ms, плюс время на загрузку зависимостей.
+
+Подмастерье использует обратный подход: \textbf{один долгоживущий процесс, в который потоки загружаются динамически}. После первой загрузки поток живёт в образе и вызывается напрямую через \texttt{funcall}. Повторный вызов — это просто вызов функции, без файлового ввода-вывода.
+
+\subsection{Явное состояние (SICP-style)}
+
+Состояние Подмастерья хранится как явный параметр, передаваемый через рекурсию. Это паттерн из SICP (Structure and Interpretation of Computer Programs) — мутабельное состояние заменяется аккумулятором в хвостовой рекурсии:
+
+\begin{lispcode}[caption={подмастерье/main.lisp — рекурсивный цикл с явным состоянием}]
+(defun опрос (сдвиг реестр)
+  (handler-case
+      (let* ((тело       (получить-обновления сдвиг))
+             (обновления (or (разобрать-обновления тело) '()))
+             (сообщения  (извлечь-сообщения обновления)))
+        (multiple-value-bind (новый-рег новый-сдвиг)
+            (обр-сообщения сообщения реестр сдвиг)
+          (when (> новый-сдвиг сдвиг)
+            (сохранить-сдвиг новый-сдвиг))
+          (опрос новый-сдвиг новый-рег)))
+    (error (e)
+      (format t "Ошибка цикла: ~a~%" e)
+      (sleep 5)
+      (опрос сдвиг реестр))))
+\end{lispcode}
+
+Здесь \texttt{реестр} — это alist вида \texttt{(имя-пакета . путь)}, который накапливается по мере загрузки новых потоков. Обратим внимание: глобального мутабельного состояния нет. Каждая итерация получает реестр как параметр и возвращает обновлённый.
+
+\subsection{Реестр потоков и активный поток}
+
+Активный поток определяется через файл \texttt{активный.scm} — S-выражение, которое Мастер записывает при переключении потока:
+
+\begin{lispcode}[caption={подмастерье/main.lisp — чтение активного потока}]
+(defun прочитать-активный ()
+  (let ((путь (format nil "~aактивный.scm" *каталог-потоков*)))
+    (handler-case
+        (with-open-file (f путь)
+          (let* ((д     (read f nil nil))
+                 (файл  (cadr (assoc 'файл  (cdr д))))
+                 (пакет (cadr (assoc 'пакет (cdr д)))))
+            (when (and файл пакет)
+              (list файл пакет))))
+      (error () nil))))
+\end{lispcode}
+
+Формат \texttt{активный.scm}:
+\begin{verbatim}
+(активный
+  (файл  "/path/to/потоки/уточнение.lisp")
+  (пакет "уточнение"))
+\end{verbatim}
+
+\subsection{Загрузка потока в образ}
+
+Загрузка потока идемпотентна — если поток уже в реестре, он не перегружается:
+
+\begin{lispcode}[caption={подмастерье/main.lisp — ленивая загрузка в образ}]
+(defun загрузить-в-образ (путь пакет реестр)
+  "Загружает поток в образ если ещё не в реестре.
+  Возвращает новый реестр."
+  (if (assoc пакет реестр :test #'string=)
+      реестр
+      (handler-case
+          (progn
+            (load путь :verbose nil :print nil)
+            (format t "Загружен поток: ~a~%" пакет)
+            (cons (cons пакет путь) реестр))
+        (error (e)
+          (format t "Ошибка загрузки ~a: ~a~%" пакет e)
+          реестр))))
+\end{lispcode}
+
+\subsection{Модуль исполнителя}
+
+Файл \texttt{исполнитель.lisp} предоставляет обобщённый API для загрузки и запуска потоков с развитой обработкой условий. Система рестартов позволяет восстанавливаться от ошибок без перезапуска процесса:
+
+\begin{lispcode}[caption={подмастерье/исполнитель.lisp — выполнение с рестартами}]
+(defun выполнить-задачу (поток-функция задача)
+  "Вызывает функцию потока с поддержкой рестартов."
+  (restart-case
+      (handler-case
+          (funcall поток-функция задача)
+        (error (у)
+          (format nil "Ошибка выполнения: ~a" у)))
+    (повторить ()
+      :report "Повторить выполнение задачи"
+      (выполнить-задачу поток-функция задача))
+    (подменить (значение)
+      :report "Использовать запасное значение"
+      :interactive (lambda ()
+                     (format t "Введите запасное значение: ")
+                     (list (read)))
+      значение)))
+\end{lispcode}
+
+Функция \texttt{выполнить-с-повтором} реализует retry-логику через хвостовую рекурсию — без \texttt{loop}, без мутабельного счётчика:
+
+\begin{lispcode}[caption={подмастерье/исполнитель.lisp — retry через рекурсию}]
+(defun выполнить-с-повтором (поток-функция задача макс-попыток)
+  (let ((попытка 0))
+    (labels ((попробовать ()
+               (incf попытка)
+               (handler-case
+                   (funcall поток-функция задача)
+                 (error (у)
+                   (if (< попытка макс-попыток)
+                       (попробовать)
+                       (format nil "Ошибка после ~a попыток: ~a"
+                               макс-попыток у))))))
+      (попробовать))))
+\end{lispcode}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Поток-порождатель: метациркулярная петля}
+\label{sec:spawner}
+
+\subsection{Идея}
+
+Порождатель — это поток, который умеет создавать новые потоки. Он принимает описание на естественном языке, отправляет его LLM с системным промптом-шаблоном, получает CL-код, компилирует его и загружает в тот же образ. Тем самым петля замыкается: \textit{исполняемая среда порождает сама себя}.
+
+\subsection{Системный промпт как контракт}
+
+Промпт задаёт жёсткий контракт на структуру генерируемого кода:
+
+\begin{lispcode}[caption={мастер/потоки/порождатель.lisp — системный промпт}]
+(defparameter *промпт-системы*
+  "Ты генератор вычислительных потоков на Common Lisp.
+Верни ТОЛЬКО код Common Lisp без пояснений, без markdown.
+Требования к потоку:
+- (defpackage :поток-ИМЯ (:use :cl) (:export #:выполнить))
+- (in-package :поток-ИМЯ) после defpackage
+- (defun выполнить (задача) ...) — единственная точка входа
+- OPENROUTER_API_KEY через (sb-ext:posix-getenv ...)
+- HTTP через drakma, JSON через cl-json (уже загружены)
+- рекурсия вместо loop, функции до 15 строк")
+\end{lispcode}
+
+\subsection{Извлечение и компиляция кода}
+
+LLM иногда оборачивает код в markdown-блок (\texttt{```lisp...```}). Для обработки этого случая реализован парсер через рекурсию:
+
+\begin{lispcode}[caption={мастер/потоки/порождатель.lisp — извлечение кода из LLM-ответа}]
+(defun начало-блока-p (строка)
+  (let ((с (string-trim '(#\Space #\Tab) строка)))
+    (and (>= (length с) 3)
+         (string= (subseq с 0 3) "```"))))
+
+(defun извлечь-из-блока (строки)
+  "Убирает ```-обёртку если есть."
+  (labels ((ищи (ост внутри накоп)
+             (cond
+               ((null ост)
+                (when накоп
+                  (format nil "~{~a~%~}" (reverse накоп))))
+               ((and (not внутри) (начало-блока-p (car ост)))
+                (ищи (cdr ост) t накоп))
+               ((and внутри (начало-блока-p (car ост)))
+                (ищи (cdr ост) nil накоп))
+               (внутри
+                (ищи (cdr ост) t (cons (car ост) накоп)))
+               (t
+                (ищи (cdr ост) nil накоп)))))
+    (let ((строки-список
+           (uiop:split-string строки :separator '(#\Newline))))
+      (or (ищи строки-список nil nil) строки))))
+\end{lispcode}
+
+Имя пакета извлекается из кода через поиск подстроки \texttt{"поток-"}:
+
+\begin{lispcode}[caption={мастер/потоки/порождатель.lisp — извлечение имени пакета}]
+(defun имя-пакета (код)
+  (let* ((метка "поток-")
+         (поз   (search метка код)))
+    (if (null поз)
+        "безымянный"
+        (let* ((нач (+ поз (length метка)))
+               (кон (or (position-if
+                          (lambda (c)
+                            (member c '(#\Space #\Newline
+                                        #\( #\) #\` #\")))
+                          код :start нач)
+                        (length код))))
+          (subseq код нач кон)))))
+\end{lispcode}
+
+\subsection{Загрузка в живой образ}
+
+После успешной компиляции поток загружается в тот же образ, где работает Мастер:
+
+\begin{lispcode}[caption={мастер/потоки/порождатель.lisp — загрузка результата в образ}]
+(defun выполнить (описание)
+  (handler-case
+      (let* ((сырой (запросить-генерацию описание))
+             (код   (извлечь-из-блока сырой))
+             (имя   (имя-пакета код))
+             (путь  (записать-поток имя код))
+             (ok?   (компилировать путь))
+             (знак  (if ok? "OK" "WARN")))
+        (when ok?
+          (загрузить-в-образ путь
+            (format nil "поток-~a" имя)))
+        (format nil "Поток ~s ~a ~a и доступен в образе."
+                имя знак (if ok? "скомпилирован" "не скомпилирован")))
+    (error (e)
+      (format nil "Ошибка порождения: ~a" e))))
+\end{lispcode}
+
+Функция \texttt{компилировать} использует \texttt{compile-file} и проверяет третье возвращаемое значение (\texttt{failure-p}):
+
+\begin{lispcode}[caption={мастер/потоки/порождатель.lisp — компиляция}]
+(defun компилировать (путь)
+  (handler-case
+      (multiple-value-bind (_ warn fail)
+          (compile-file путь :print nil :verbose nil)
+        (declare (ignore _ warn))
+        (not fail))
+    (error () nil)))
+\end{lispcode}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Трассировка вычислений}
+\label{sec:tracer}
+
+\texttt{tracer.lisp} реализует механизм записи хода вычислений в файл \texttt{.след} как серии S-выражений. Это позволяет анализировать пошаговую работу потока post-hoc.
+
+\subsection{API трассировки}
+
+\begin{lispcode}[caption={подмастерье/tracer.lisp — API трассировки}]
+(defpackage :трас
+  (:use :cl)
+  (:export :начать-след :записать-шаг :завершить-след
+           :*путь-журнала* :*имя-потока* :*задача*))
+
+(defvar *путь-журнала* nil "Путь к файлу журнала.")
+(defvar *шаги*         nil "Накопленные шаги.")
+(defvar *начало*       0   "Время начала в мс.")
+
+(defun записать-шаг (номер вход ответ &key (качество :неизвестно))
+  (let ((мс (- (мс-сейчас) *начало*)))
+    (push `(шаг (номер ,номер)
+                (вход  ,вход)
+                (ответ ,ответ)
+                (мс    ,мс)
+                (качество ,качество))
+          *шаги*)))
+\end{lispcode}
+
+\subsection{Формат .след файлов}
+
+Итоговый журнал — читаемое S-выражение, которое можно загрузить в REPL через \texttt{read}:
+
+\begin{lispcode}[caption={Пример .след файла}]
+(след
+  (поток "уточнение") (время "2026-03-13T11:30:00")
+  (задача "разберись что такое continuation")
+  (шаги
+    (шаг (номер 1) (вход "разберись что такое continuation")
+         (ответ "continuation — это...") (мс 1234)
+         (качество :недостаточно))
+    (шаг (номер 2) (вход "уточни про call/cc")
+         (ответ "call/cc в Scheme...") (мс 2100)
+         (качество :достаточно)))
+  (итог "Объяснение continuation дано.") (мс-всего 3334)
+  (итераций 2))
+\end{lispcode}
+
+\subsection{Инициализация трассировщика}
+
+Трассировщик загружается Подмастерьем автоматически при наличии переменной окружения \texttt{TRACE\_FILE}:
+
+\begin{lispcode}[caption={подмастерье/исполнитель.lisp — ленивая загрузка трассировщика}]
+(defun обеспечить-трассировщик ()
+  (let* ((путь-трас
+          (merge-pathnames "tracer.lisp"
+            (make-pathname
+              :defaults *load-pathname*
+              :name nil :type nil)))
+         (путь-журнала (sb-ext:posix-getenv "TRACE_FILE")))
+    (when (and путь-журнала (probe-file путь-трас))
+      (load путь-трас :verbose nil :print nil)
+      (when (find-package :трас)
+        (setf (symbol-value
+                (find-symbol "*ПУТЬ-ЖУРНАЛА*" :трас))
+              путь-журнала)))))
+\end{lispcode}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Ключевые архитектурные решения}
+\label{sec:design}
+
+\subsection{Единый язык в стеке}
+
+Переход с Racket на Common Lisp устранил несоответствие языков: оркестратор и потоки теперь в одном языковом пространстве. Это открывает возможности, недостижимые в полиязычной архитектуре:
+
+\begin{itemize}[noitemsep]
+  \item Поток, загруженный в образ Мастера, напрямую вызывается через \texttt{funcall} — без сериализации, без IPC;
+  \item Общие библиотеки (\texttt{drakma}, \texttt{cl-json}) загружаются один раз;
+  \item Ошибки в потоках ловятся системой условий CL — не падают весь процесс.
+\end{itemize}
+
+\subsection{Контракт вместо фреймворка}
+
+Вместо тяжёлого фреймворка система использует минимальный контракт: \texttt{defpackage :поток-ИМЯ} + \texttt{defun выполнить (задача)}. Это:
+\begin{itemize}[noitemsep]
+  \item Делает потоки независимыми файлами, которые можно тестировать в REPL;
+  \item Позволяет LLM генерировать потоки без знания внутренностей системы;
+  \item Исключает coupling: Подмастерье не знает ничего о содержимом потока.
+\end{itemize}
+
+\subsection{Ленивая загрузка и идемпотентность}
+
+Поток загружается в образ только при первом обращении и помещается в реестр. Повторные вызовы работают с уже загруженной функцией. Это инверсия типичного serverless-паттерна: \textit{не «запустить процесс на запрос», а «держать всё горячим»}.
+
+\subsection{Явное состояние vs. мутабельные переменные}
+
+Цикл опроса Подмастерья передаёт состояние (реестр потоков, сдвиг) как параметры рекурсии. Это устраняет целый класс ошибок: невозможно случайно мутировать реестр из другого потока исполнения, невозможно забыть сбросить сдвиг при рестарте.
+
+Исключение: \texttt{*активные-потоки*} в Мастере — это \texttt{hash-table}, потому что его модифицируют разные обработчики команд, и передавать его через рекурсию poll-loop означало бы усложнить сигнатуру без выигрыша.
+
+\subsection{Метациркулярность как проектное решение}
+
+Поток-порождатель замыкает петлю: система способна расширять саму себя в рантайме без перезапуска и без вмешательства разработчика. Это не хак, а проектное решение: Common Lisp — гомоиконный язык, где код и данные имеют одно представление. \texttt{compile-file} + \texttt{load} — штатные операции над образом.
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Запуск и развёртывание}
+
+\subsection{Зависимости}
+
+\begin{itemize}[noitemsep]
+  \item SBCL ≥ 2.0
+  \item Quicklisp (загружается автоматически из \texttt{\textasciitilde/quicklisp/setup.lisp})
+  \item \texttt{dexador} — HTTP-клиент (через Quicklisp)
+  \item \texttt{cl-json} — JSON (через Quicklisp)
+  \item \texttt{drakma} + \texttt{flexi-streams} — HTTP для Подмастерья (через Quicklisp)
+\end{itemize}
+
+\subsection{Переменные окружения}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Переменная} & \textbf{Компонент} & \textbf{Назначение} \\
+\midrule
+\texttt{MASTER\_BOT\_TOKEN}     & Мастер       & Telegram Bot API токен \\
+\texttt{APPRENTICE\_BOT\_TOKEN} & Подмастерье  & Telegram Bot API токен \\
+\texttt{ADMIN\_CHAT\_ID}        & Оба          & Whitelist chat ID \\
+\texttt{OPENROUTER\_API\_KEY}   & Оба          & Ключ к OpenRouter \\
+\texttt{TRACE\_FILE}            & Подмастерье  & Путь к файлу трассировки \\
+\bottomrule
+\end{tabular}
+\caption{Переменные окружения}
+\end{table}
+
+\subsection{Скрипт запуска Мастера}
+
+\begin{lispcode}[language=bash,caption={мастер/cl/start.sh}]
+#!/usr/bin/env bash
+export MASTER_BOT_TOKEN="${MASTER_BOT_TOKEN:?нужен MASTER_BOT_TOKEN}"
+export ADMIN_CHAT_ID="${ADMIN_CHAT_ID:?нужен ADMIN_CHAT_ID}"
+export OPENROUTER_API_KEY="${OPENROUTER_API_KEY:?нужен OPENROUTER_API_KEY}"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+exec sbcl --noinform \
+  --load ~/quicklisp/setup.lisp \
+  --eval "(push #p\"${SCRIPT_DIR}/\" asdf:*central-registry*)" \
+  --eval '(asdf:load-system :мастер :verbose nil)' \
+  --eval '(мастер:start)'
+\end{lispcode}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Тестирование}
+
+Система покрыта набором smoke-тестов, проверяющих корректность ключевых функций без запуска реального бота:
+
+\begin{lispcode}[caption={мастер/cl/тесты.lisp — smoke-тесты}]
+;; 1. api-url формат
+(тест "api-url формат"
+  (let ((url (api-url "getUpdates")))
+    (assert (search "telegram.org/bot" url))
+    (assert (search "getUpdates" url))))
+
+;; 2. душа->системный-промпт
+(тест "душа->системный-промпт"
+  (let* ((ф '(:имя "Тест" :описание "тест-бот"
+              :стиль "краткий" :инструкции "коротко"))
+         (п (душа->системный-промпт ф)))
+    (assert (search "Тест" п))
+    (assert (search "краткий" п))))
+
+;; 3. список-потоков
+(тест "список-потоков возвращает строки"
+  (let ((lst (список-потоков)))
+    (assert (listp lst))
+    (dolist (имя lst) (assert (stringp имя)))))
+
+;; 4. роутинг команды
+(тест "обработать-команду /старт"
+  (let ((resp (обработать-команду 0 "/старт")))
+    (assert (stringp resp))
+    (assert (plusp (length resp)))))
+\end{lispcode}
+
+Результат прогона:
+\begin{verbatim}
+[ТЕСТЫ МАСТЕР]
+  ✓ api-url формат
+  ✓ душа->системный-промпт
+  ✓ список-потоков возвращает строки
+  ✓ обработать-команду /старт
+  ✓ %split-words базовый
+  ✓ обработать-команду неизвестная → строка
+Итого ошибок: 0
+\end{verbatim}
+
+% ═══════════════════════════════════════════════════════════════════════════════
+\section{Заключение}
+\label{sec:conclusion}
+
+Статья описала Development System — двухкомпонентную систему оркестрации LLM-потоков на Common Lisp. Основные результаты:
+
+\begin{enumerate}[noitemsep]
+  \item Сформулирован и реализован \textbf{контракт потока}: \texttt{defpackage :поток-ИМЯ} + \texttt{defun выполнить (задача) → строка}. Контракт прост, проверяем и достаточен для полной автоматизации запуска.
+
+  \item Реализован \textbf{персистентный образ} с ленивой загрузкой: потоки загружаются в SBCL-образ один раз и вызываются напрямую без subprocess-оверхеда.
+
+  \item Реализована \textbf{метациркулярная петля}: поток-порождатель генерирует новые потоки через LLM, компилирует их и загружает в тот же образ, не требуя перезапуска процесса.
+
+  \item Система \textbf{полностью мигрирована с Racket} на Common Lisp. Единый язык в стеке устранил несоответствие семантик и дал доступ к нативной системе условий SBCL.
+
+  \item Архитектура следует принципу \textbf{явного состояния} (SICP-style): цикл опроса передаёт реестр потоков как параметр рекурсии, исключая скрытые глобальные мутации.
+\end{enumerate}
+
+Направления дальнейшего развития: интеграция формальной верификации через ACL2 (доказательство замкнутости потоков), реализация протокола \texttt{ask-user} для интерактивных checkpoint-ов в середине выполнения, и расширение трассировщика для генерации человекочитаемых отчётов.
+
+\end{document}

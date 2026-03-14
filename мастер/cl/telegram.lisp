@@ -50,6 +50,37 @@
                                   ,@(when caption `(("caption" . ,caption))))))
     (error () nil)))
 
+;; ─── скачивание файлов ───────────────────────────────────────────────────────
+
+(defun get-file-path (file-id)
+  "getFile → file_path (относительный путь на серверах TG)."
+  (handler-case
+      (let* ((resp (api-post "getFile" `((:file--id . ,file-id))))
+             (result (cdr (assoc :result resp))))
+        (cdr (assoc :file--path result)))
+    (error (e) (log/error "tg" "get-file: ~A" e) nil)))
+
+(defun download-file (file-path local-path)
+  "Скачать файл по TG file_path, сохранить в local-path."
+  (handler-case
+      (let* ((url (format nil "https://api.telegram.org/file/bot~A/~A"
+                          *токен* file-path))
+             (bytes (dexador:get url :force-binary t)))
+        (with-open-file (out local-path
+                             :direction :output
+                             :element-type '(unsigned-byte 8)
+                             :if-exists :supersede)
+          (write-sequence bytes out))
+        t)
+    (error (e) (log/error "tg" "download-file: ~A" e) nil)))
+
+(defun fetch-document (file-id dest-path)
+  "Полный цикл: file-id → скачать → dest-path. Возвращает t/nil."
+  (let ((fp (get-file-path file-id)))
+    (if fp
+        (download-file fp dest-path)
+        (progn (log/error "tg" "fetch-document: file_path не получен") nil))))
+
 (defun make-reply-keyboard (rows)
   `((:keyboard
      . ,(mapcar (lambda (row)
