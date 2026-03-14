@@ -1,5 +1,12 @@
 (in-package #:мастер)
 
+;; Импорт bordeaux-threads с псевдонимом
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (require :bordeaux-threads))
+
+(defpackage #:bt (:use) (:nicknames :bordeaux-threads))
+(import 'bordeaux-threads:make-thread :мастер)
+
 (defvar *polling* t)
 (defparameter *offset-file* "/tmp/cl-master-offset.txt")
 
@@ -26,6 +33,8 @@
     (drain saved)))
 
 (defun start ()
+  ;; Запуск HTTP-сервера в отдельном потоке
+  (make-thread #'start-http-server :name "http-server")
   (log/info "мастер" "Загружаем потоки...")
   (ensure-directories-exist *каталог-истории*)
   (загрузить-все-потоки)
