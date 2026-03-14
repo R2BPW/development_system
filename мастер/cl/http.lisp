@@ -60,3 +60,44 @@
   (setf (hunchentoot:return-code*) status)
   (setf (hunchentoot:content-type*) "application/json")
   (cl-json:encode-json-to-string `((:error . ,msg))))
+
+;; ─── HTTP Routes ─────────────────────────────────────────────────────────────
+
+(hunchentoot:define-easy-handler (api-flows :uri "/api/flows") ()
+  (if (not (%check-auth hunchentoot:*request*))
+      (%json-error "Unauthorized" 401)
+      (%json-ok `((:flows . ,(активные-потоки))))))
+
+(hunchentoot:define-easy-handler (api-dialog :uri "/api/dialog"
+                                              :default-request-type :post) ()
+  (if (not (%check-auth hunchentoot:*request*))
+      (%json-error "Unauthorized" 401)
+      (let* ((body (hunchentoot:raw-post-data :force-text t))
+             (json (cl-json:decode-json-from-string body))
+             (text (cdr (assoc :text json))))
+        (if (null text)
+            (%json-error "Missing 'text' field" 400)
+            (handler-case
+                (let ((response (обработать-команду 0 text)))
+                  (%json-ok `((:response . ,response))))
+              (error (e)
+                (%json-error (format nil "~A" e) 500)))))))
+
+(hunchentoot:define-easy-handler (api-run-flow :uri "/api/flows/run"
+                                                :default-request-type :post) ()
+  (if (not (%check-auth hunchentoot:*request*))
+      (%json-error "Unauthorized" 401)
+      (let* ((body (hunchentoot:raw-post-data :force-text t))
+             (json (cl-json:decode-json-from-string body))
+             (flow (cdr (assoc :flow json)))
+             (task (cdr (assoc :task json))))
+        (cond
+          ((null flow) (%json-error "Missing 'flow' field" 400))
+          ((null task) (%json-error "Missing 'task' field" 400))
+          (t (handler-case
+                 (let ((result (запустить-поток flow task)))
+                   (if result
+                       (%json-ok `((:result . ,result)))
+                       (%json-error (format nil "Flow '~A' not found" flow) 404)))
+               (error (e)
+                 (%json-error (format nil "~A" e) 500))))))))
