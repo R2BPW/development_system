@@ -1,0 +1,380 @@
+% xelatex add_tour_analysis_report.tex
+\documentclass[11pt, a4paper, oneside]{article}
+
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setotherlanguage{english}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+\setmonofont[Scale=0.82]{DejaVu Sans Mono}
+
+\usepackage[
+  a4paper,
+  top=22mm, bottom=22mm,
+  left=28mm, right=22mm,
+  headheight=14pt
+]{geometry}
+
+\usepackage[protrusion=false,expansion=false]{microtype}
+\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{amsmath}
+
+\usepackage[dvipsnames,svgnames,table]{xcolor}
+\definecolor{AccentBlue}  {RGB}{25,  90, 160}
+\definecolor{AccentRed}   {RGB}{165,  20,  20}
+\definecolor{AccentOrange}{RGB}{190,  70,   0}
+\definecolor{AccentGreen} {RGB}{28,  130,  55}
+\definecolor{AccentGray}  {RGB}{85,   90,  100}
+\definecolor{LightGray}   {RGB}{246, 248, 252}
+\definecolor{RowRed}      {RGB}{255, 235, 235}
+\definecolor{RowOrange}   {RGB}{255, 245, 225}
+\definecolor{RowBlue}     {RGB}{235, 242, 255}
+\definecolor{MidGray}     {RGB}{120, 125, 138}
+\definecolor{DarkGray}    {RGB}{35,   38,  48}
+\definecolor{CodeBg}      {RGB}{245, 246, 252}
+
+\usepackage[
+  unicode, colorlinks=true,
+  linkcolor=AccentBlue,
+  urlcolor=AccentBlue,
+  pdftitle={Анализ процесса add\_tour — отчёт о рисках},
+]{hyperref}
+
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable,skins}
+
+\newtcolorbox{critbox}[1][]{
+  colback=RowRed, colframe=AccentRed,
+  colbacktitle=AccentRed, coltitle=white,
+  fonttitle=\sffamily\small\bfseries,
+  boxrule=0.5pt, arc=3pt, breakable,
+  top=5pt, bottom=5pt, left=8pt, right=8pt, #1}
+
+\newtcolorbox{warnbox}[1][]{
+  colback=RowOrange, colframe=AccentOrange,
+  colbacktitle=AccentOrange, coltitle=white,
+  fonttitle=\sffamily\small\bfseries,
+  boxrule=0.5pt, arc=3pt, breakable,
+  top=5pt, bottom=5pt, left=8pt, right=8pt, #1}
+
+\newtcolorbox{infobox}[1][]{
+  colback=LightGray, colframe=AccentBlue!50,
+  colbacktitle=AccentBlue, coltitle=white,
+  fonttitle=\sffamily\small\bfseries,
+  boxrule=0.5pt, arc=3pt, breakable,
+  top=5pt, bottom=5pt, left=8pt, right=8pt, #1}
+
+\newtcolorbox{summarybox}{
+  colback=RowBlue, colframe=AccentBlue,
+  boxrule=0.6pt, arc=4pt,
+  top=6pt, bottom=6pt, left=10pt, right=10pt}
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{MidGray}\sffamily add\_tour — анализ рисков}
+\fancyhead[R]{\small\color{MidGray}\sffamily 14 марта 2026}
+\fancyfoot[C]{\small\color{MidGray}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{AccentBlue}\leaders\hrule height 0.4pt\hfill}}
+\renewcommand{\footrulewidth}{0pt}
+
+\usepackage{titlesec}
+\titleformat{\section}
+  {\large\bfseries\sffamily\color{AccentBlue}}
+  {\thesection.}{0.7em}{}
+  [\vspace{1pt}{\color{AccentBlue}\rule{\linewidth}{0.5pt}}\vspace{3pt}]
+\titleformat{\subsection}
+  {\normalsize\bfseries\sffamily\color{DarkGray}}
+  {\thesubsection.}{0.6em}{}
+\titleformat{\subsubsection}
+  {\small\bfseries\color{AccentOrange}}
+  {}{0pt}{}
+
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titlespacing*{\subsection}{0pt}{10pt}{3pt}
+\titlespacing*{\subsubsection}{0pt}{7pt}{2pt}
+
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\renewcommand{\arraystretch}{1.35}
+\setlength{\parskip}{5pt}
+\setlength{\parindent}{0pt}
+\setlist{nosep, leftmargin=1.4em, topsep=3pt}
+\captionsetup{font=small, labelfont=bf}
+
+\newcommand{\coderef}[1]{{\footnotesize\color{MidGray}\ttfamily #1}}
+\newcommand{\critical}{\textcolor{AccentRed}{\textbf{критично}}}
+\newcommand{\warning}{\textcolor{AccentOrange}{\textbf{предупреждение}}}
+\newcommand{\info}{\textcolor{AccentBlue}{замечание}}
+
+% ════════════════════════════════════════════════════════════════
+\begin{document}
+
+{\noindent\large\bfseries\sffamily\color{AccentBlue} add\_tour — анализ рисков}
+\hfill{\small\color{MidGray} 14 марта 2026 · 🔴~4 · ⚠️~5 · ℹ️~3}
+\vspace{1mm}
+{\color{AccentBlue}\rule{\textwidth}{0.5pt}}
+\vspace{4mm}
+
+% ════════════════════════════════════════════════════════════════
+\section{Критичные проблемы}
+
+% ── Проблема 1 ──────────────────────────────────────────────────
+\begin{critbox}[title={🔴 \#1 — Версионирование контейнеров не откатывается при сбое алгоритма}]
+
+\textbf{Фаза:} Фаза 2 → Фаза 3 (переход к алгоритму маршрутизации)\\
+\coderef{run\_add\_tour\_task() → move\_visited\_containers\_to\_new\_tour() → шаг D4}
+
+\textbf{Описание.}
+При переносе контейнеров в новый маршрут выполняется группа операций:
+\begin{enumerate}
+  \item Старые версии контейнеров закрываются (заполняются поля \texttt{next\_version\_date})
+  \item Создаются новые версии с привязкой к новой дате/маршруту
+  \item Переносятся зоны транспортировщиков
+  \item Создаются планы для перенесённых контейнеров
+  \item Новые версии привязываются к планам
+\end{enumerate}
+Все эти операции выполняются \emph{до} отправки запроса к алгоритму маршрутизации.
+Если алгоритм возвращает ошибку, \texttt{execution\_log.compensate()}
+откатывает шаги только частично: удаляет созданные объекты,
+но \textbf{не восстанавливает поля версионирования}
+(\texttt{previous\_version\_date}, \texttt{next\_version\_date})
+у записей, изменённых на шаге~1.
+
+\textbf{Последствие.} В базе остаются «закрытые» старые версии контейнеров
+(поле \texttt{next\_version\_date} заполнено), тогда как соответствующие
+новые версии удалены. Контейнеры теряют непрерывность версионной цепочки.
+
+\textbf{Рекомендация.}
+Шаг \texttt{move\_visited\_containers\_to\_new\_tour} уже логируется
+с \texttt{action="complex"} и сохраняет \texttt{value\_before}.
+Необходимо убедиться, что в \texttt{value\_before} включены
+\textbf{все изменённые поля} (\texttt{next\_version\_date},
+\texttt{previous\_version\_date}, \texttt{plan\_id})
+старых версий, а не только ID.
+\end{critbox}
+
+% ── Проблема 2 ──────────────────────────────────────────────────
+\begin{critbox}[title={🔴 \#2 — Статусы исходных планов посещений не откатываются}]
+
+\textbf{Фаза:} Фаза 2 → Фаза 3\\
+\coderef{run\_add\_tour\_task() → update\_plans\_status\_moved + update\_empty\_plans\_status\_moved}
+
+\textbf{Описание.}
+После переноса контейнеров планы посещений, из которых ушли контейнеры,
+переводятся в статус «Перенесено». Это два отдельных шага журнала:
+\texttt{update\_plans\_status\_moved} и \texttt{update\_empty\_plans\_status\_moved}.
+
+Компенсация через \texttt{execution\_log.compensate()} должна откатывать
+эти статусы при сбое алгоритма. Однако \texttt{compensate()} использует
+\texttt{qs.update(**state)}, где \texttt{state} содержит \textbf{одно значение status\_id}
+для всей группы планов. Если до переноса планы имели \emph{разные} статусы,
+откат восстановит \textbf{неправильный} статус части планов.
+
+\textbf{Последствие.} Планы посещений отображаются пользователю
+в статусе «Перенесено», хотя фактического переноса не произошло.
+
+\textbf{Рекомендация.}
+При логировании \texttt{update\_plans\_status\_moved} сохранять
+индивидуальный статус каждого плана до изменения
+(формат \texttt{value\_before} уже поддерживает это через \texttt{prepare\_rows}).
+\end{critbox}
+
+% ── Проблема 3 ──────────────────────────────────────────────────
+\begin{critbox}[title={🔴 \#3 — Журнал выполнения зависает при ранних ошибках API}]
+
+\textbf{Фаза:} Фаза 0 (API-слой)\\
+\coderef{WasteSiteVisitedContainers.add\_tour() → AddTourTaskExecutionLog.objects.create()}
+
+\textbf{Описание.}
+Журнал выполнения (\texttt{AddTourTaskExecutionLog}) создаётся
+\emph{сразу после} получения или создания маршрута — до проверок бизнес-правил
+(зоны РО, совместимость с ТС, подрядчик).
+При провале любой из этих проверок управление передаётся в блок компенсации
+(\texttt{ERR0}), который возвращает ошибку API, но \textbf{не вызывает
+\texttt{execution\_log.mark\_failed()}}.
+
+Журнал остаётся в статусе \texttt{running} бессрочно.
+
+\textbf{Последствие.} Накопление «зависших» записей в таблице
+\texttt{statistic\_add\_tour\_task\_execution\_log}
+со статусом \texttt{running}. При мониторинге или повторном запуске
+они могут ошибочно расцениваться как активные операции.
+
+\textbf{Рекомендация.}
+В блоке обработки ошибок \texttt{ERR0} добавить:
+\texttt{execution\_log.mark\_failed("Ошибка проверки: ...")}
+перед возвратом ответа API.
+\end{critbox}
+
+% ── Проблема 4 ──────────────────────────────────────────────────
+\begin{critbox}[title={🔴 \#4 — Сбой в самой компенсации не обрабатывается}]
+
+\textbf{Фаза:} Компенсация при сбое алгоритма\\
+\coderef{add\_tour\_task() → execution\_log.compensate() → ERR2}
+
+\textbf{Описание.}
+При сбое алгоритма вызывается \texttt{execution\_log.compensate()},
+которая должна откатить все шаги и передать управление в \texttt{ERR2}
+для финального логирования.
+
+Вызов \texttt{compensate()} \textbf{не обёрнут в \texttt{try-except}}.
+Если \texttt{compensate()} сама завершится с исключением
+(например, при обращении к недоступной таблице или неизвестной модели),
+исключение поднимается выше и блок \texttt{ERR2} не выполняется.
+
+\textbf{Последствие.}
+Данные остаются в промежуточном состоянии без записи в журнал.
+Ни уведомления пользователю, ни логирования ошибки не происходит.
+
+\textbf{Рекомендация.}
+Обернуть вызов \texttt{compensate()} в \texttt{try-except}:
+\begin{quote}\ttfamily\small
+try:\\
+\quad execution\_log.compensate()\\
+except Exception as e:\\
+\quad logger.exception("Ошибка компенсации: \%s", e)\\
+\quad execution\_log.mark\_failed(str(e))\\
+raise
+\end{quote}
+\end{critbox}
+
+% ════════════════════════════════════════════════════════════════
+\section{Предупреждения}
+
+% ── Предупреждение 1 ────────────────────────────────────────────
+\begin{warnbox}[title={⚠️ \#5 — Обновление зоны РО пропускается при наличии контейнеров}]
+
+\textbf{Фаза:} Фаза 1\\
+\coderef{add\_tour\_task() → ветка B1="Нет" → update\_tour\_ro\_zone}
+
+\textbf{Описание.}
+Обновление зоны РО (\texttt{ro\_zone}) у маршрута выполняется
+\emph{только в ветке}, когда нет контейнеров для добавления без плана.
+Если контейнеры есть — ветка с обновлением \texttt{ro\_zone} полностью пропускается.
+
+\textbf{Вопрос к команде:} Должна ли \texttt{ro\_zone} обновляться независимо
+от наличия контейнеров? Если да — это баг.
+\end{warnbox}
+
+% ── Предупреждение 2 ────────────────────────────────────────────
+\begin{warnbox}[title={⚠️ \#6 — Polygon-only сценарий не закрывает журнал выполнения}]
+
+\textbf{Фаза:} Фаза 0 (специальный сценарий)\\
+\coderef{add\_tour() → polygon-only ветка → OK0}
+
+\textbf{Описание.}
+В «только полигонном» сценарии (обработка точек без переноса контейнеров)
+API возвращает успех синхронно.
+Если на этом пути успел создаться \texttt{AddTourTaskExecutionLog},
+он не закрывается через \texttt{mark\_completed()}.
+
+\textbf{Рекомендация.}
+Убедиться что в polygon-only ветке либо журнал не создаётся вовсе,
+либо явно закрывается перед возвратом ответа.
+\end{warnbox}
+
+% ── Предупреждение 3 ────────────────────────────────────────────
+\begin{warnbox}[title={⚠️ \#7 — Отсутствует обработка ошибок при подготовке данных для алгоритма}]
+
+\textbf{Фаза:} Фаза 3\\
+\coderef{BuildRoutesPlanCommand.handle() → шаг D2 (подготовка: задания, точки, ТС)}
+
+\textbf{Описание.}
+Узел подготовки данных для алгоритма (задания, транспортные базы,
+водители, точки) не имеет явной ветки ошибки в графе процесса.
+При сбое на этапе подготовки поведение зависит от реализации
+\texttt{BuildRoutesPlanCommand.handle()} — не ясно, будет ли вызван
+\texttt{execution\_log.compensate()}.
+
+\textbf{Рекомендация.}
+Добавить явный \texttt{try-except} вокруг подготовки данных
+с переходом к компенсации при ошибке.
+\end{warnbox}
+
+% ── Предупреждение 4 ────────────────────────────────────────────
+\begin{warnbox}[title={⚠️ \#8 — RoutePlanningCalculation остаётся без статуса ошибки}]
+
+\textbf{Фаза:} Фаза 3\\
+\coderef{run\_add\_tour\_task() → RoutePlanningCalculation.objects.create() → сбой алгоритма}
+
+\textbf{Описание.}
+При сбое алгоритма запись \texttt{RoutePlanningCalculation}
+остаётся в базе со статусом, не отражающим ошибку.
+Поле \texttt{error\_message} модели существует, но не заполняется.
+
+\textbf{Рекомендация.}
+В блоке компенсации обновлять:
+\texttt{RoutePlanningCalculation.objects.filter(pk=calc.id)\\
+.update(status="failed", error\_message=str(e))}.
+\end{warnbox}
+
+% ── Предупреждение 5 ────────────────────────────────────────────
+\begin{warnbox}[title={⚠️ \#9 — M2M-поля зон транспортировщиков не откатываются стандартным механизмом}]
+
+\textbf{Фаза:} Фаза 4\\
+\coderef{create\_and\_link\_waste\_site\_visit\_plans() → plan.transporter\_zones.set(...)}
+
+\textbf{Описание.}
+Планы посещений получают зоны транспортировщиков через
+\texttt{plan.transporter\_zones.set(...)}.
+Метод \texttt{execution\_log.compensate()} использует
+\texttt{QuerySet.update()} для отката, который \textbf{не работает с M2M-полями}.
+
+\textbf{Вопрос к команде:} Предусмотрен ли отдельный механизм отката
+для \texttt{transporter\_zones}?
+\end{warnbox}
+
+% ════════════════════════════════════════════════════════════════
+\section{Замечания}
+
+% ── Замечание 1 ─────────────────────────────────────────────────
+\begin{infobox}[title={ℹ️ \#10 — Дублирование проверки наличия переноса}]
+
+Проверка «были контейнеры на перенос?» выполняется дважды:
+в начале Фазы~2 (C3) и в начале Фазы~5 (F1).
+Второй раз это не ошибка, но создаёт точку рассогласования при рефакторинге.
+Можно передавать флаг \texttt{had\_containers\_to\_move}
+из Фазы~2 в Фазу~5 явно.
+\end{infobox}
+
+% ── Замечание 2 ─────────────────────────────────────────────────
+\begin{infobox}[title={ℹ️ \#11 — Два терминала успеха в одном процессе}]
+
+Процесс имеет два независимых успешных завершения:
+«только полигоны» (синхронный ответ API) и основной поток
+(асинхронная задача, \texttt{mark\_completed()}).
+Это архитектурно обоснованно, но стоит документировать явно —
+чтобы мониторинг и тесты учитывали оба пути.
+\end{infobox}
+
+% ── Замечание 3 ─────────────────────────────────────────────────
+\begin{infobox}[title={ℹ️ \#12 — Точка входа не связана с графом переходов}]
+
+В схеме процесса узел «E1 Пользователь запускает add\_tour» изолирован:
+нет ребра к следующему шагу.
+Это артефакт инструмента построения схемы, не баг в коде.
+Стоит исправить схему для корректной документации.
+\end{infobox}
+
+
+
+\vfill
+\hrule
+\vspace{4mm}
+{\small\color{MidGray}
+  Отчёт сгенерирован инструментом \texttt{поток-граф-аналитик} (development\_system).
+  Исходные данные: граф процесса \texttt{add\_tour} v1.0, модели \texttt{statistic/models.py},
+  \texttt{model\_app/tasks.py}.
+}
+
+\end{document}

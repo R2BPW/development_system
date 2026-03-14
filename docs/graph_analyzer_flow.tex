@@ -1,0 +1,280 @@
+% xelatex graph_analyzer_flow.tex
+\documentclass[11pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+\setmonofont[Scale=0.82]{DejaVu Sans Mono}
+
+\usepackage[
+  a4paper,
+  top=18mm, bottom=18mm,
+  left=18mm, right=18mm
+]{geometry}
+
+\usepackage[dvipsnames, svgnames, table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{
+  arrows.meta,
+  shapes.geometric,
+  shapes.misc,
+  positioning,
+  fit,
+  backgrounds,
+  calc,
+  decorations.pathreplacing,
+  shadows.blur,
+}
+
+\usepackage[
+  unicode, hidelinks,
+  pdftitle={Поток граф-аналитика},
+]{hyperref}
+
+% ── цветовая палитра ──────────────────────────────────────────────
+\definecolor{TGBlue}    {RGB}{33,  150, 243}
+\definecolor{CLPurple}  {RGB}{103,  58, 183}
+\definecolor{PyGold}    {RGB}{245, 158,  11}
+\definecolor{LLMGreen}  {RGB}{16,  185, 129}
+\definecolor{LightBg}   {RGB}{248, 249, 252}
+\definecolor{LaneTG}    {RGB}{227, 242, 253}
+\definecolor{LaneCL}    {RGB}{237, 231, 246}
+\definecolor{LanePy}    {RGB}{255, 248, 225}
+\definecolor{LaneLLM}   {RGB}{209, 250, 229}
+\definecolor{ArrowGray} {RGB}{ 80,  80,  80}
+\definecolor{ErrRed}    {RGB}{220,  50,  50}
+
+% ── общие стили узлов ─────────────────────────────────────────────
+\tikzset{
+  every node/.style={font=\sffamily\small},
+  % базовый блок
+  block/.style={
+    rectangle, rounded corners=4pt,
+    minimum width=44mm, minimum height=9mm,
+    text centered, text width=42mm,
+    draw, line width=0.7pt,
+    blur shadow={shadow blur steps=4, shadow xshift=0.5mm, shadow yshift=-0.5mm,
+                 shadow blur radius=1.5mm, shadow opacity=25},
+  },
+  % Telegram
+  tg/.style={block, fill=LaneTG,  draw=TGBlue!70,  text=TGBlue!90!black},
+  % CL / мастер
+  cl/.style={block, fill=LaneCL,  draw=CLPurple!70, text=CLPurple!90!black},
+  % Python
+  py/.style={block, fill=LanePy,  draw=PyGold!80,   text=PyGold!90!black},
+  % LLM / внешнее
+  llm/.style={block, fill=LaneLLM, draw=LLMGreen!80, text=LLMGreen!80!black},
+  % ромб-решение
+  decision/.style={
+    diamond, aspect=2.2,
+    minimum width=46mm, minimum height=12mm,
+    text centered, text width=38mm,
+    draw=CLPurple!70, fill=LaneCL,
+    line width=0.7pt,
+    font=\sffamily\footnotesize, text=CLPurple!90!black,
+  },
+  % маленький узел (деталь)
+  sub/.style={
+    rectangle, rounded corners=3pt,
+    minimum width=36mm, minimum height=7.5mm,
+    text centered, text width=34mm,
+    draw, line width=0.5pt, dashed,
+    font=\sffamily\footnotesize,
+  },
+  py-sub/.style={sub, fill=LanePy!60,  draw=PyGold!60,   text=PyGold!80!black},
+  llm-sub/.style={sub, fill=LaneLLM!60, draw=LLMGreen!60, text=LLMGreen!70!black},
+  % стрелки
+  arr/.style={-{Stealth[length=5pt]}, line width=1pt, color=ArrowGray},
+  arr-dashed/.style={arr, dashed, color=ArrowGray!60},
+  err-arr/.style={arr, color=ErrRed, dashed},
+  % метка на стрелке
+  lbl/.style={font=\sffamily\scriptsize, text=ArrowGray, fill=white,
+              inner sep=1.5pt, midway},
+}
+
+\pagestyle{empty}
+
+\begin{document}
+
+% ════════════════════════════════════════════════════════════════
+\begin{center}
+{\large\bfseries\sffamily Поток граф-аналитика}\\[2pt]
+{\small\color{gray} от входящего файла до структурированного отчёта}
+\end{center}
+
+\vspace{4mm}
+
+\begin{center}
+\scalebox{0.72}{%
+\begin{tikzpicture}[
+  node distance = 7mm and 22mm,
+  x=1mm, y=1mm,
+]
+
+% ── Шаг 0: пользователь ──────────────────────────────────────────
+\node[tg] (user) {👤 Пользователь\\отправляет .md файл};
+
+% ── Шаг 1: Telegram ──────────────────────────────────────────────
+\node[tg, below=of user] (tg-in)
+  {\textbf{Telegram}\\входящий документ};
+
+% ── Шаг 2: мастер — fetch ────────────────────────────────────────
+\node[cl, below=of tg-in] (fetch)
+  {\textbf{мастер CL}\\fetch-document\\(getFile → download)};
+
+% ── Шаг 3: решение — файл скачан? ────────────────────────────────
+\node[decision, below=8mm of fetch] (ok-fetch) {Файл\\скачан?};
+
+% ── Шаг 4: поток активируется ────────────────────────────────────
+\node[cl, below=8mm of ok-fetch] (поток)
+  {\textbf{поток-граф-аналитик}\\(CL)\\выполнить-с-файлом};
+
+% ── Шаг 5: Python CLI ────────────────────────────────────────────
+\node[py, below=of поток] (cli)
+  {\textbf{cli.py}\\python3 graph\_analyzer/cli.py\\graph.md [models.py]};
+
+% ── Шаг 6: парсер (два подузла рядом) ────────────────────────────
+\node[py-sub, below=8mm of cli, xshift=-24mm] (parser-g)
+  {parser.py\\parse\_mermaid()\\→ nodes, edges};
+\node[py-sub, below=8mm of cli, xshift=+24mm] (parser-m)
+  {parser.py\\parse\_models\_simple()\\→ [{name, fields}]};
+
+% соединитель
+\coordinate (split) at ($(cli.south)+(0,-4mm)$);
+
+% ── Шаг 7: аналитик ──────────────────────────────────────────────
+\node[py, below=26mm of cli] (analyzer)
+  {\textbf{analyzer.py}\\analyze() — 3 шага};
+
+% ── Три LLM-запроса ──────────────────────────────────────────────
+\node[llm-sub, below=8mm of analyzer, xshift=-34mm] (llm1)
+  {① Компенсация\\compensation\_gap};
+\node[llm-sub, below=8mm of analyzer] (llm2)
+  {② Крайние случаи\\edge\_cases};
+\node[llm-sub, below=8mm of analyzer, xshift=+34mm] (llm3)
+  {③ Достижимость\\reachability};
+
+% LLM API
+\node[llm, below=26mm of analyzer] (openrouter)
+  {\textbf{OpenRouter API}\\anthropic/claude-opus-4-5\\→ findings JSON};
+
+% ── Форматтер ────────────────────────────────────────────────────
+\node[py, below=of openrouter] (fmt)
+  {\textbf{formatter.py}\\format\_report()\\→ текст отчёта};
+
+% ── мастер возвращает ─────────────────────────────────────────────
+\node[cl, below=of fmt] (reply)
+  {\textbf{мастер CL}\\send-message\\усечь до 3800 симв.};
+
+% ── Telegram → пользователь ──────────────────────────────────────
+\node[tg, below=of reply] (tg-out)
+  {\textbf{Telegram}\\исходящее сообщение};
+\node[tg, below=of tg-out] (user-out)
+  {👤 Пользователь\\получает отчёт};
+
+% ── error path (справа от ok-fetch) ──────────────────────────────
+\node[tg, right=22mm of ok-fetch, yshift=4mm,
+      fill=red!10, draw=ErrRed!70, text=ErrRed,
+      minimum width=34mm, text width=32mm] (err)
+  {send-message\\«Не удалось скачать»};
+
+% ════ СТРЕЛКИ ═════════════════════════════════════════════════════
+
+% user → tg-in → fetch → ok-fetch
+\draw[arr] (user)     -- (tg-in);
+\draw[arr] (tg-in)    -- (fetch);
+\draw[arr] (fetch)    -- (ok-fetch);
+
+% ok-fetch → Да → поток
+\draw[arr] (ok-fetch) -- node[lbl, right=1pt]{Да} (поток);
+
+% ok-fetch → Нет → err
+\draw[err-arr] (ok-fetch) -- node[lbl, above=1pt]{Нет} (err);
+
+% поток → cli
+\draw[arr] (поток)    -- (cli);
+
+% cli → два парсера
+\draw[arr] (split) -- (parser-g);
+\draw[arr] (split) -- (parser-m);
+\draw[arr-dashed] (cli.south) -- (split);
+
+% парсеры → analyzer (сливаются)
+\coordinate (merge) at ($(analyzer.north)+(0,4mm)$);
+\draw[arr] (parser-g) |- (merge);
+\draw[arr] (parser-m) |- (merge);
+\draw[arr-dashed] (merge) -- (analyzer.north);
+
+% analyzer → три LLM-запроса
+\coordinate (asplit) at ($(analyzer.south)+(0,-4mm)$);
+\draw[arr-dashed] (analyzer.south) -- (asplit);
+\draw[arr] (asplit) -- (llm1);
+\draw[arr] (asplit) -- (llm2);
+\draw[arr] (asplit) -- (llm3);
+
+% три запроса → openrouter (сливаются)
+\coordinate (amerge) at ($(openrouter.north)+(0,4mm)$);
+\draw[arr] (llm1) |- (amerge);
+\draw[arr] (llm2) |- (amerge);
+\draw[arr] (llm3) |- (amerge);
+\draw[arr-dashed] (amerge) -- (openrouter.north);
+
+% openrouter → fmt → reply → tg-out → user-out
+\draw[arr] (openrouter) -- node[lbl, right=1pt]{findings JSON} (fmt);
+\draw[arr] (fmt)         -- (reply);
+\draw[arr] (reply)       -- (tg-out);
+\draw[arr] (tg-out)      -- (user-out);
+
+% ════ ФОНОВЫЕ ПОЛОСЫ (lanes) ══════════════════════════════════════
+\begin{scope}[on background layer]
+
+  % Telegram lane (левый бордюр)
+  \node[fit=(user)(tg-in)(tg-out)(user-out),
+        fill=TGBlue!5, draw=TGBlue!25, rounded corners=6pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{TGBlue}]above left:Telegram}] {};
+
+  % CL lane
+  \node[fit=(fetch)(ok-fetch)(поток)(reply),
+        fill=CLPurple!5, draw=CLPurple!20, rounded corners=6pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{CLPurple}]above left:CL / мастер}] {};
+
+  % Python lane
+  \node[fit=(cli)(parser-g)(parser-m)(analyzer)(fmt),
+        fill=PyGold!5, draw=PyGold!25, rounded corners=6pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{PyGold}]above left:Python / graph\_analyzer}] {};
+
+  % LLM lane
+  \node[fit=(llm1)(llm2)(llm3)(openrouter),
+        fill=LLMGreen!5, draw=LLMGreen!25, rounded corners=6pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{LLMGreen!70!black}]above right:OpenRouter LLM}] {};
+
+\end{scope}
+
+% ════ ЛЕГЕНДА ═════════════════════════════════════════════════════
+\node[below=14mm of user-out, xshift=32mm,
+      draw=gray!40, fill=LightBg, rounded corners=4pt,
+      inner sep=5pt, font=\sffamily\scriptsize, text=gray!80] (legend) {
+  \begin{tabular}{cl}
+    \textcolor{TGBlue}{\rule{8pt}{5pt}} & Telegram \\[2pt]
+    \textcolor{CLPurple}{\rule{8pt}{5pt}} & Common Lisp / мастер \\[2pt]
+    \textcolor{PyGold}{\rule{8pt}{5pt}} & Python / graph\_analyzer \\[2pt]
+    \textcolor{LLMGreen}{\rule{8pt}{5pt}} & OpenRouter API (LLM) \\[2pt]
+    \textcolor{ErrRed}{- - -} & Путь ошибки \\
+  \end{tabular}
+};
+
+\end{tikzpicture}%
+}% scalebox
+\end{center}
+
+\vfill
+\begin{center}
+{\footnotesize\color{gray}
+  \texttt{мастер/потоки/граф-аналитик.lisp} · \texttt{tools/graph\_analyzer/} ·
+  development\_system
+}
+\end{center}
+
+\end{document}

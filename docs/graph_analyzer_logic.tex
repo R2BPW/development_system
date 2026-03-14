@@ -1,0 +1,349 @@
+% xelatex graph_analyzer_logic.tex
+\documentclass[10pt]{article}
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setdefaultlanguage{russian}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+\setmonofont[Scale=0.80]{DejaVu Sans Mono}
+
+\usepackage[
+  paperwidth=297mm, paperheight=210mm,  % A4 landscape
+  top=14mm, bottom=14mm,
+  left=14mm, right=14mm,
+]{geometry}
+
+\usepackage[dvipsnames,svgnames,table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{
+  arrows.meta, positioning, fit,
+  shapes.geometric, shapes.multipart,
+  backgrounds, calc, shadows.blur,
+}
+\usepackage[unicode,hidelinks]{hyperref}
+
+% ── палитра ──────────────────────────────────────────────────────
+\definecolor{CInput}  {RGB}{30,  80, 160}   % входные данные
+\definecolor{CParse}  {RGB}{90,  40, 160}   % парсинг
+\definecolor{CAlgo}   {RGB}{140, 20, 100}   % алгоритмы
+\definecolor{CPrompt} {RGB}{15, 130,  90}   % промпты
+\definecolor{CLLM}    {RGB}{20, 160, 110}   % LLM
+\definecolor{CMerge}  {RGB}{180, 90,  10}   % merge
+\definecolor{COut}    {RGB}{20,  80,  20}   % вывод
+
+\definecolor{BInput}  {RGB}{225,235,255}
+\definecolor{BParse}  {RGB}{240,230,255}
+\definecolor{BAlgo}   {RGB}{255,225,245}
+\definecolor{BPrompt} {RGB}{210,250,235}
+\definecolor{BLLM}    {RGB}{195,248,225}
+\definecolor{BMerge}  {RGB}{255,238,210}
+\definecolor{BOut}    {RGB}{220,245,220}
+
+% ── стили ────────────────────────────────────────────────────────
+\tikzset{
+  % процессный блок
+  proc/.style={
+    rectangle, rounded corners=4pt,
+    minimum width=38mm, minimum height=11mm,
+    text centered, draw, line width=0.7pt,
+    font=\sffamily\footnotesize,
+    blur shadow={shadow blur steps=3, shadow xshift=0.4mm,
+                 shadow yshift=-0.5mm, shadow blur radius=1.2mm,
+                 shadow opacity=20},
+  },
+  % блок с данными — простой прямоугольник с разделителем
+  data/.style={
+    rectangle, rounded corners=3pt,
+    minimum width=32mm, text width=30mm,
+    draw=#1!55, fill=#1!12, line width=0.6pt,
+    font=\sffamily\scriptsize, align=left,
+    inner sep=4pt,
+    blur shadow={shadow blur steps=3, shadow xshift=0.3mm,
+                 shadow yshift=-0.4mm, shadow blur radius=1mm,
+                 shadow opacity=12},
+  },
+  % стрелки
+  arr/.style={-{Stealth[length=4.5pt,width=3.5pt]}, line width=0.9pt},
+  arr-fat/.style={arr, line width=1.3pt},
+  lbl/.style={font=\sffamily\tiny, fill=white, inner sep=1.5pt, midway},
+  % аннотации типов
+  typ/.style={font=\ttfamily\tiny, color=gray!60, inner sep=0pt},
+}
+
+\pagestyle{empty}
+
+% ════════════════════════════════════════════════════════════════
+\begin{document}
+\begin{center}
+{\large\bfseries\sffamily Граф-аналитик процессов — логика потока}\\[-1pt]
+{\scriptsize\color{gray} поток-граф-аналитик · Common Lisp · data-flow}
+\end{center}
+
+\vspace{-2mm}
+
+\begin{center}
+\scalebox{0.58}{%
+\begin{tikzpicture}[
+  node distance=6mm and 10mm,
+  x=1mm, y=1mm,
+]
+
+%% ══════════════════════════════════════════════
+%% КОЛОНКА 0 — Входные данные
+%% ══════════════════════════════════════════════
+
+\node[proc, fill=BInput, draw=CInput!60, text=CInput!90!black,
+      minimum width=36mm, minimum height=22mm, text width=34mm,
+      align=center] (in-graph)
+  {\textbf{Mermaid flowchart}\\[2pt]
+   {\ttfamily\tiny граф.md}\\
+   {\tiny текстовый граф:\\flowchart TD\\A0[…] –{}–> B1[…]}};
+
+\node[proc, fill=BInput, draw=CInput!60, text=CInput!90!black,
+      minimum width=36mm, minimum height=22mm, text width=34mm,
+      align=center, below=8mm of in-graph] (in-models)
+  {\textbf{Django-модели}\\[2pt]
+   {\ttfamily\tiny модели.py}\\
+   {\tiny class WasteSite…:\\  status = models.FK…}};
+
+%% ══════════════════════════════════════════════
+%% КОЛОНКА 1 — Парсинг
+%% ══════════════════════════════════════════════
+
+\node[proc, fill=BParse, draw=CParse!60, text=CParse!90!black,
+      right=16mm of in-graph, minimum width=36mm, text width=34mm,
+      align=center] (parse-graph)
+  {\textbf{\ttfamily разобрать-граф}\\[2pt]
+   {\tiny regex (cl-ppcre):\\
+   {\ttfamily (\textbackslash w+)["](…)["]}\\
+   {\ttfamily (\textbackslash w+)-->|"…"|}\\
+   → classify узлы}};
+
+\node[proc, fill=BParse, draw=CParse!60, text=CParse!90!black,
+      right=16mm of in-models, minimum width=36mm, text width=34mm,
+      align=center] (parse-models)
+  {\textbf{\ttfamily разобрать-модели}\\[2pt]
+   {\tiny regex по строкам:\\
+   {\ttfamily class (\textbackslash w+)\textbackslash s*(}\\
+   {\ttfamily (\textbackslash w+)=models.(\textbackslash w+)(}\\
+   → choices? null?}};
+
+%% структуры данных после парсинга
+\node[data=CParse, right=12mm of parse-graph] (ds-graph)
+  {{\color{CParse!80!black}\textbf{узел}}\\[2pt]
+   {\ttfamily\tiny id: string\\метка: string\\ошибка?: bool\\терминал?: bool\\решение?: bool}};
+
+\node[data=CParse, right=12mm of parse-models] (ds-models)
+  {{\color{CParse!80!black}\textbf{модель}}\\[2pt]
+   {\ttfamily\tiny имя: string\\поля: [поле]\\\ \ .имя .тип\\\ \ .null? .choices?}};
+
+% ── вспомогательно: ребро ────────────────────────────────────────
+\node[data=CParse, below=5mm of ds-graph] (ds-edge)
+  {{\color{CParse!80!black}\textbf{ребро}}\\[2pt]
+   {\ttfamily\tiny откуда: string\\куда: string\\условие: string?}};
+
+%% ══════════════════════════════════════════════
+%% КОЛОНКА 2 — Алгоритмы подготовки
+%% ══════════════════════════════════════════════
+
+\node[proc, fill=BAlgo, draw=CAlgo!50, text=CAlgo!90!black,
+      right=28mm of ds-graph, yshift=-2mm,
+      minimum width=40mm, text width=38mm, align=center] (algo-bfs-fwd)
+  {\textbf{\ttfamily недостижимые}\\[2pt]
+   {\tiny BFS вперёд от стартовых узлов\\
+   (нет входящих рёбер)\\
+   → множество непосещённых}};
+
+\node[proc, fill=BAlgo, draw=CAlgo!50, text=CAlgo!90!black,
+      below=7mm of algo-bfs-fwd,
+      minimum width=40mm, text width=38mm, align=center] (algo-bfs-bwd)
+  {\textbf{\ttfamily пути-к-ошибкам}\\[2pt]
+   {\tiny BFS назад от ERR-узлов\\
+   глубина 4 → цепочка\\
+   предшествующих шагов}};
+
+\node[proc, fill=BAlgo, draw=CAlgo!50, text=CAlgo!90!black,
+      below=7mm of algo-bfs-bwd,
+      minimum width=40mm, text width=38mm, align=center] (algo-summary)
+  {\textbf{\ttfamily резюме-графа/моделей}\\[2pt]
+   {\tiny текстовое описание\\
+   для LLM-контекста:\\
+   «узлов N, рёбер M…»}};
+
+%% выходы алгоритмов
+\node[data=CAlgo, right=10mm of algo-bfs-fwd, yshift=3mm] (ds-unreach)
+  {{\color{CAlgo!80!black}\textbf{недост.}}\\[2pt]
+   {\ttfamily\tiny [узел]\\список изолированных}};
+
+\node[data=CAlgo, right=10mm of algo-bfs-bwd] (ds-errpaths)
+  {{\color{CAlgo!80!black}\textbf{ошибки}}\\[2pt]
+   {\ttfamily\tiny ERR1 ← E20, E19…\\строка для промпта}};
+
+\node[data=CAlgo, right=10mm of algo-summary, yshift=-3mm] (ds-summary)
+  {{\color{CAlgo!80!black}\textbf{резюме}}\\[2pt]
+   {\ttfamily\tiny граф-строка\\модели-строка}};
+
+%% ══════════════════════════════════════════════
+%% КОЛОНКА 3 — Три LLM-промпта
+%% ══════════════════════════════════════════════
+
+\node[proc, fill=BPrompt, draw=CPrompt!60, text=CPrompt!90!black,
+      right=22mm of ds-unreach, yshift=8mm,
+      minimum width=42mm, text width=40mm, align=center] (p1)
+  {\textbf{① :компенсация}\\[2pt]
+   {\tiny граф + модели + \underline{ошибки}\\
+   «для каждого ERR-узла:\\что уже изменилось в БД\\и не откатывается?»}};
+
+\node[proc, fill=BPrompt, draw=CPrompt!60, text=CPrompt!90!black,
+      below=7mm of p1,
+      minimum width=42mm, text width=40mm, align=center] (p2)
+  {\textbf{② :крайние-случаи}\\[2pt]
+   {\tiny граф + \underline{модели}\\
+   «пустые списки, null FK,\\параллельные вызовы,\\partial execution»}};
+
+\node[proc, fill=BPrompt, draw=CPrompt!60, text=CPrompt!90!black,
+      below=7mm of p2,
+      minimum width=42mm, text width=40mm, align=center] (p3)
+  {\textbf{③ :достижимость}\\[2pt]
+   {\tiny граф + \underline{недостижимые}\\
+   «условия невозможные\\при нормальном потоке,\\незавершённые циклы»}};
+
+%% LLM-вызов
+\node[proc, fill=BLLM, draw=CLLM!60, text=CLLM!80!black,
+      right=12mm of p2,
+      minimum width=36mm, text width=34mm, align=center,
+      minimum height=48mm] (llm)
+  {\textbf{вызвать-llm}\\[3pt]
+   {\ttfamily\tiny dexador:post\\OpenRouter API}\\[4pt]
+   {\tiny \texttt{POST /chat/completions}\\
+   model: claude-opus-4-5\\
+   max\_tokens: 2000}\\[4pt]
+   {\scriptsize ↓}\\[2pt]
+   {\tiny JSON-ответ:\\
+   \texttt{\{findings:[…]\}}}};
+
+%% ══════════════════════════════════════════════
+%% КОЛОНКА 4 — Merge + Format
+%% ══════════════════════════════════════════════
+
+\node[proc, fill=BMerge, draw=CMerge!60, text=CMerge!90!black,
+      right=12mm of llm, yshift=15mm,
+      minimum width=38mm, text width=36mm, align=center] (merge)
+  {\textbf{\ttfamily извлечь-findings}\\[2pt]
+   {\tiny parse JSON-ответа (cl-json)\\strip markdown-обёртки\\→ список alist}};
+
+\node[data=CMerge, below=6mm of merge] (ds-finding)
+  {{\color{CMerge!80!black}\textbf{finding}}\\[2pt]
+   {\ttfamily\tiny node: "ERR1"\\category: "comp\_gap"\\description: "…"\\recommendation: "…"\\severity: critical}};
+
+\node[proc, fill=BMerge, draw=CMerge!60, text=CMerge!90!black,
+      below=6mm of ds-finding,
+      minimum width=38mm, text width=36mm, align=center] (fmt)
+  {\textbf{\ttfamily отформатировать-отчёт}\\[2pt]
+   {\tiny сгруппировать по severity\\добавить иконки 🔴 ⚠️  ℹ️\\header со счётчиками}};
+
+%% ══════════════════════════════════════════════
+%% КОЛОНКА 5 — Выход
+%% ══════════════════════════════════════════════
+
+\node[proc, fill=BOut, draw=COut!60, text=COut!80!black,
+      right=12mm of merge, yshift=-22mm,
+      minimum width=36mm, text width=34mm, align=center,
+      minimum height=40mm] (out)
+  {\textbf{Отчёт}\\[4pt]
+   {\scriptsize
+   🔴 [Компенсация] ERR1\\
+   \hspace{2mm}{\tiny не откатывает B2-B3}\\[3pt]
+   ⚠️\ [Крайний случай] E5\\
+   \hspace{2mm}{\tiny containers=[ ] }\\[3pt]
+   🟡 [Достижимость] F2\\
+   \hspace{2mm}{\tiny недостижим из E25}\\[4pt]
+   {\tiny Всего: N  🔴 K  ⚠️\ M}}};
+
+%% ══════════════════════════════════════════════
+%% СТРЕЛКИ
+%% ══════════════════════════════════════════════
+
+% входы → парсеры
+\draw[arr, color=CInput] (in-graph)  -- node[lbl]{текст} (parse-graph);
+\draw[arr, color=CInput] (in-models) -- node[lbl]{текст} (parse-models);
+
+% парсеры → структуры данных
+\draw[arr, color=CParse] (parse-graph)  -- (ds-graph);
+\draw[arr, color=CParse] (parse-graph)  -- (ds-edge);
+\draw[arr, color=CParse] (parse-models) -- (ds-models);
+
+% структуры → алгоритмы
+\draw[arr, color=CParse!70] (ds-graph) -- node[lbl,above]{узлы+рёбра} (algo-bfs-fwd);
+\draw[arr, color=CParse!70] (ds-graph) |- (algo-bfs-bwd);
+\draw[arr, color=CParse!70] (ds-edge)  |- (algo-bfs-bwd);
+\draw[arr, color=CParse!70] (ds-graph) |- (algo-summary);
+\draw[arr, color=CParse!70] (ds-models) -| (algo-summary);
+
+% алгоритмы → выходы
+\draw[arr, color=CAlgo] (algo-bfs-fwd) -- (ds-unreach);
+\draw[arr, color=CAlgo] (algo-bfs-bwd) -- (ds-errpaths);
+\draw[arr, color=CAlgo] (algo-summary) -- (ds-summary);
+
+% выходы → промпты (заполнение контекста)
+\draw[arr, color=CAlgo!60] (ds-errpaths) -| node[lbl,near start]{} (p1);
+\draw[arr, color=CAlgo!60] (ds-summary) -| (p1);
+\draw[arr, color=CAlgo!60] (ds-summary) -- (p2);
+\draw[arr, color=CAlgo!60] (ds-unreach) -| node[lbl,near start]{} (p3);
+\draw[arr, color=CAlgo!60] (ds-summary) -| (p3);
+
+% промпты → LLM (3 стрелки входят)
+\draw[arr, color=CPrompt] (p1.east) -- (p1.east -| llm.west);
+\draw[arr, color=CPrompt] (p2.east) -- (p2.east -| llm.west);
+\draw[arr, color=CPrompt] (p3.east) -- (p3.east -| llm.west);
+
+% LLM → merge (3 стрелки выходят)
+\draw[arr-fat, color=CLLM] (llm.east |- p1.east) -- node[lbl,above]{\tiny findings} (merge.west |- p1.east);
+\draw[arr-fat, color=CLLM] (llm.east |- p2.east) -- (merge.west |- p2.east);
+\draw[arr-fat, color=CLLM] (llm.east |- p3.east) -- (merge.west |- p3.east);
+
+% merge → ds-finding → fmt → out
+\draw[arr, color=CMerge] (merge) -- (ds-finding);
+\draw[arr, color=CMerge] (ds-finding) -- (fmt);
+\draw[arr-fat, color=COut] (fmt.east) -| (out.south);
+
+%% ══════════════════════════════════════════════
+%% ФОНОВЫЕ ЗОНЫ (lanes)
+%% ══════════════════════════════════════════════
+
+\begin{scope}[on background layer]
+  \node[fit=(in-graph)(in-models),
+        fill=CInput!4, draw=CInput!20, rounded corners=5pt,
+        inner sep=4pt, label={[font=\sffamily\tiny\color{CInput}]above:Входные данные}] {};
+
+  \node[fit=(parse-graph)(parse-models)(ds-graph)(ds-edge)(ds-models),
+        fill=CParse!4, draw=CParse!20, rounded corners=5pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{CParse}]above:Парсинг}] {};
+
+  \node[fit=(algo-bfs-fwd)(algo-bfs-bwd)(algo-summary)(ds-unreach)(ds-errpaths)(ds-summary),
+        fill=CAlgo!4, draw=CAlgo!20, rounded corners=5pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{CAlgo}]above:Подготовка контекста}] {};
+
+  \node[fit=(p1)(p2)(p3)(llm),
+        fill=CPrompt!4, draw=CPrompt!20, rounded corners=5pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{CPrompt}]above:LLM-анализ}] {};
+
+  \node[fit=(merge)(ds-finding)(fmt),
+        fill=CMerge!4, draw=CMerge!20, rounded corners=5pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{CMerge}]above:Объединение}] {};
+
+  \node[fit=(out),
+        fill=COut!4, draw=COut!20, rounded corners=5pt,
+        inner sep=5pt, label={[font=\sffamily\tiny\color{COut}]above:Результат}] {};
+\end{scope}
+
+\end{tikzpicture}%
+}% scalebox
+\end{center}
+
+\vfill
+{\centering\scriptsize\color{gray}
+  \texttt{поток-граф-аналитик} · cl-ppcre · dexador · cl-json ·
+  3 специализированных промпта · категории: \texttt{compensation\_gap | edge\_case | unreachable\_branch}\par}
+
+\end{document}
