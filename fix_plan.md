@@ -88,7 +88,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 ```
 Создать `web/src/styles/app.css` со стилями для: `.app` (height: 100dvh, display flex, flex-direction column), `.tab-bar` (position fixed, bottom 0, left/right 0, height 56px + safe-area-inset-bottom, background surface, border-top border), `.tab-btn` (flex 1, кнопка без стилей, иконка + label), `.screen` (flex 1, overflow auto, padding-bottom 56px+safe-area).
 
-- [ ] **[WEB-STORE]** Создать `web/src/store.js`. Экспортировать: `getToken()` — из localStorage 'мастер_token'; `setToken(t)` — сохранить; `clearToken()` — удалить; `getHistory()` — из localStorage 'мастер_history' (JSON массив, default []); `saveHistory(arr)` — сохранить.
+- [x] **[WEB-STORE]** Создать `web/src/store.js`. Экспортировать: `getToken()` — из localStorage 'мастер_token'; `setToken(t)` — сохранить; `clearToken()` — удалить; `getHistory()` — из localStorage 'мастер_history' (JSON массив, default []); `saveHistory(arr)` — сохранить.
 
 - [ ] **[WEB-API]** Создать `web/src/api.js`. Константа `API_BASE` из `import.meta.env.VITE_API_BASE || ''`. Функция `apiFetch(path, options)` — добавляет заголовок `Authorization: Bearer ${getToken()}`, выбрасывает ошибку при 401 (clearToken + reload). Экспортировать: `getFlows()` → GET /api/flows → массив строк; `sendDialog(text)` → POST /api/dialog → строка ответа; `runFlow(flow, task)` → POST /api/flows/run → строка результата; `spawnFlow(description)` → POST /api/flows/spawn → объект {result, flow_name}.
 
