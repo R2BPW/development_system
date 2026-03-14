@@ -60,7 +60,7 @@ export default defineConfig({ plugins: [react()], base: '/' })
 ```
 Создать `web/index.html` с PWA meta тегами: viewport, apple-mobile-web-app-capable, apple-mobile-web-app-status-bar-style (black-translucent), theme-color (#0a0a0a), manifest link, title "Мастер". Подключить `src/main.jsx`.
 
-- [ ] **[WEB-MANIFEST]** Создать `web/public/manifest.json`:
+- [x] **[WEB-MANIFEST]** Создать `web/public/manifest.json`:
 ```json
 {
   "name": "Мастер",
