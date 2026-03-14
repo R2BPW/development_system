@@ -602,6 +602,204 @@
                  :счётчик (+ счётчик (length tool-calls))))))
 
 ;; ════════════════════════════════════════════════════════════════
+;; Системный промпт агента
+;; ════════════════════════════════════════════════════════════════
+
+(defparameter *системный-промпт-агента*
+  "Ты — агент-аналитик кода. Твоя задача: найти проблемы в реализации процесса.
+
+ВХОД:
+- Граф процесса (Mermaid) — какие шаги и переходы
+- Путь к репозиторию — где лежит код
+
+ИНСТРУМЕНТЫ:
+- search_in_file, read_lines, find_function — чтение кода
+- bfs_predecessors, bfs_successors, get_node_label — навигация по графу
+- report_finding — зафиксировать проблему
+- finish — завершить анализ
+
+СТРАТЕГИЯ:
+1. Начни с error-узлов (ERR*) и проверь их компенсацию
+2. Для каждого error-узла найди предшественников через bfs_predecessors
+3. Найди код этих шагов через find_function и search_in_file
+4. Проверь: что изменяется в БД до ошибки? Откатывается ли?
+5. Зафиксируй находки через report_finding
+6. Перейди к decision-узлам — все ли ветки покрыты?
+7. Когда достаточно исследовал — вызови finish
+
+ОГРАНИЧЕНИЯ:
+- Максимум 30 tool calls. Планируй эффективно.
+- Не выдумывай проблемы. Только то, что видишь в коде.
+- Severity: critical (блокер), warning (надо поправить), info (замечание)
+
+ФОРМАТ FINDING:
+{
+  \"node\": \"ERR1\",
+  \"category\": \"compensation_gap|edge_case|unreachable|race_condition|missing_validation\",
+  \"description\": \"что не так\",
+  \"code_ref\": \"path/to/file.py:42\",
+  \"severity\": \"critical|warning|info\",
+  \"recommendation\": \"как исправить\"
+}")
+
+;; ════════════════════════════════════════════════════════════════
+;; Форматирование отчёта
+;; ════════════════════════════════════════════════════════════════
+
+(defun иконка-серьёзности (severity)
+  (cond ((string= severity "critical") "🔴")
+        ((string= severity "warning")  "⚠️ ")
+        (t                             "ℹ️ ")))
+
+(defun иконка-категории (category)
+  (cond ((string= category "compensation_gap")   "[Компенсация]")
+        ((string= category "edge_case")           "[Крайний случай]")
+        ((string= category "unexpected_state")    "[Состояние]")
+        ((string= category "unreachable")         "[Достижимость]")
+        ((string= category "race_condition")      "[Гонка]")
+        ((string= category "missing_validation")  "[Валидация]")
+        (t                                        (format nil "[~A]" category))))
+
+(defun отформатировать-отчёт (findings имя-графа)
+  "Собрать markdown-отчёт из вектора findings.
+   FINDINGS — вектор alist'ов (из tool-report-finding), ИМЯ-ГРАФА — строка."
+  (let* ((findings-list (coerce findings 'list))
+         (критичных (count "critical" findings-list
+                           :key (lambda (f) (cdr (assoc :severity f)))
+                           :test #'equal))
+         (предупреждений (count "warning" findings-list
+                                :key (lambda (f) (cdr (assoc :severity f)))
+                                :test #'equal)))
+    (with-output-to-string (s)
+      (format s "📊 Отчёт агент-аналитика: ~A~%" имя-графа)
+      (format s "Находок: ~A  (🔴 ~A, ⚠️  ~A, ℹ️  ~A)~%~%"
+              (length findings-list)
+              критичных
+              предупреждений
+              (- (length findings-list) критичных предупреждений))
+      (dolist (f findings-list)
+        (let ((sev  (or (cdr (assoc :severity f)) "info"))
+              (cat  (or (cdr (assoc :category f)) "other"))
+              (node (or (cdr (assoc :node f)) "?"))
+              (desc (or (cdr (assoc :description f)) ""))
+              (ref  (cdr (assoc :code-ref f)))
+              (rec  (cdr (assoc :recommendation f))))
+          (format s "~A ~A узел ~A~%   ~A~%~@[   📍 ~A~%~]~@[   → ~A~%~]~%"
+                  (иконка-серьёзности sev)
+                  (иконка-категории cat)
+                  node
+                  desc
+                  ref
+                  rec))))))
+
+;; ════════════════════════════════════════════════════════════════
+;; Точка входа: полный pipeline
+;; ════════════════════════════════════════════════════════════════
+
+(declaim (ftype (function (t t &key (:вызвать-llm-fn t)) t) выполнить-анализ))
+
+(defparameter *макс-символов-отчёт* 3800)
+
+(defun усечь-отчёт (текст)
+  (if (> (length текст) *макс-символов-отчёт*)
+      (concatenate 'string (subseq текст 0 *макс-символов-отчёт*)
+                   "...\n[отчёт обрезан]")
+      текст))
+
+(defun построить-начальное-сообщение (граф-текст узлы)
+  "Собрать начальное user-сообщение для агента: граф + список узлов."
+  (let ((узлы-список
+          (with-output-to-string (s)
+            (maphash (lambda (id у)
+                       (format s "  ~A: ~A~A~A~%"
+                               id (узел-метка у)
+                               (if (узел-ошибка? у) " [ERROR]" "")
+                               (if (узел-решение? у) " [DECISION]" "")))
+                     узлы))))
+    (format nil "Вот граф процесса (Mermaid):
+
+~A
+
+Узлы графа:
+~A
+Проанализируй этот процесс. Начни с error-узлов, проверь компенсацию, затем decision-узлы."
+            граф-текст узлы-список)))
+
+(defun выполнить (задача)
+  "Точка входа агент-аналитика.
+   ЗАДАЧА — строка вида: <граф.md> <репо-путь>
+   Возвращает строку-отчёт."
+  (let* ((части (remove-if (lambda (s) (zerop (length s)))
+                            (uiop:split-string (trim задача) :separator '(#\Space))))
+         (граф-путь (first части))
+         (репо-путь (second части)))
+    (cond
+      ((null граф-путь)
+       "Использование: агент-аналитик <граф.md> <репо-путь>")
+      ((null репо-путь)
+       "Использование: агент-аналитик <граф.md> <репо-путь>
+Нужно указать путь к репозиторию для анализа кода.")
+      (t
+       (выполнить-анализ граф-путь репо-путь)))))
+
+(defun выполнить-анализ (граф-путь репо-путь &key (вызвать-llm-fn nil))
+  "Основной pipeline агент-аналитика.
+   ГРАФ-ПУТЬ — путь к mermaid-файлу, РЕПО-ПУТЬ — каталог репо.
+   ВЫЗВАТЬ-LLM-FN — опциональная подмена LLM для тестирования."
+  ;; Проверка входов
+  (unless (probe-file граф-путь)
+    (return-from выполнить-анализ
+      (format nil "Файл графа не найден: ~A" граф-путь)))
+  (unless (uiop:directory-exists-p репо-путь)
+    (return-from выполнить-анализ
+      (format nil "Каталог репо не найден: ~A" репо-путь)))
+
+  (handler-case
+      (let* ((граф-текст (читать-файл граф-путь))
+             (имя (pathname-name (pathname граф-путь))))
+
+        ;; 1. Парсинг графа
+        (multiple-value-bind (узлы рёбра) (разобрать-граф граф-текст)
+          (when (zerop (hash-table-count узлы))
+            (return-from выполнить-анализ
+              "Граф не содержит узлов. Проверьте формат Mermaid."))
+
+          ;; 2. Индексация репо
+          (let ((индекс (индексировать-репо репо-путь))
+                (findings (make-array 0 :adjustable t :fill-pointer 0)))
+
+            ;; 3. Построить сообщения
+            (let ((сообщения
+                    (list (list (cons :role "system")
+                                (cons :content *системный-промпт-агента*))
+                          (list (cons :role "user")
+                                (cons :content (построить-начальное-сообщение
+                                                граф-текст узлы))))))
+
+              ;; 4. Запустить tool-loop
+              (let ((llm-fn (or вызвать-llm-fn #'вызвать-llm-tools)))
+                (handler-case
+                    (tool-loop сообщения узлы рёбра репо-путь индекс findings
+                               :вызвать-llm-fn llm-fn)
+                  (error (e)
+                    ;; API ошибка или сетевая проблема — собрать partial results
+                    (format t "[агент-аналитик] Ошибка в tool-loop: ~A~%" e)
+                    (vector-push-extend
+                     (list (cons :node "SYSTEM")
+                           (cons :category "error")
+                           (cons :description
+                                 (format nil "Анализ прерван: ~A" e))
+                           (cons :severity "warning"))
+                     findings))))
+
+              ;; 5. Собрать отчёт
+              (if (zerop (length findings))
+                  (format nil "📊 Отчёт агент-аналитика: ~A~%Проблем не обнаружено." имя)
+                  (усечь-отчёт (отформатировать-отчёт findings имя)))))))
+    (error (e)
+      (format nil "Ошибка агент-аналитика: ~A" e))))
+
+;; ════════════════════════════════════════════════════════════════
 ;; Тесты
 ;; ════════════════════════════════════════════════════════════════
 
@@ -1122,6 +1320,177 @@ A0 --> ERR1"))
               (assert (<= вызовов 3) ()
                       "Слишком много вызовов: ~A (лимит 2)" вызовов))))))))
 
+(defun тест-отформатировать-отчёт ()
+  "Тест форматирования отчёта из findings."
+  (let ((findings (make-array 0 :adjustable t :fill-pointer 0)))
+    ;; Добавить несколько findings
+    (vector-push-extend
+     (list (cons :node "ERR1") (cons :category "compensation_gap")
+           (cons :description "Order not rolled back") (cons :severity "critical")
+           (cons :code-ref "orders/services.py:48")
+           (cons :recommendation "Add order.delete()"))
+     findings)
+    (vector-push-extend
+     (list (cons :node "A2") (cons :category "edge_case")
+           (cons :description "Empty list not handled") (cons :severity "warning"))
+     findings)
+    (проверить "отформатировать-отчёт — содержит заголовок"
+      (let ((отчёт (отформатировать-отчёт findings "test-graph")))
+        (assert (search "test-graph" отчёт) ()
+                "Нет имени графа в отчёте")
+        (assert (search "Находок: 2" отчёт) ()
+                "Нет счётчика находок")
+        (assert (search "ERR1" отчёт) ()
+                "Нет ERR1 в отчёте")
+        (assert (search "Order not rolled back" отчёт) ()
+                "Нет описания finding")
+        (assert (search "orders/services.py:48" отчёт) ()
+                "Нет code_ref в отчёте")))))
+
+(defun тест-выполнить-аргументы ()
+  "Тест разбора аргументов в выполнить."
+  ;; Нет аргументов
+  (проверить "выполнить — нет аргументов"
+    (let ((рез (выполнить "")))
+      (assert (search "Использование" рез) ()
+              "Ожидалось 'Использование': ~A" рез)))
+  ;; Только граф без репо
+  (проверить "выполнить — нет репо"
+    (let ((рез (выполнить "some-graph.md")))
+      (assert (search "репозиторию" рез) ()
+              "Ожидалось сообщение про репо: ~A" рез)))
+  ;; Несуществующий файл графа
+  (проверить "выполнить — несуществующий граф"
+    (let ((рез (выполнить "/tmp/nonexistent-graph-xyz.md /tmp")))
+      (assert (search "не найден" рез) ()
+              "Ожидалось 'не найден': ~A" рез))))
+
+(defun тест-интеграция ()
+  "Интеграционный тест: полный pipeline от входа до отчёта с mock LLM.
+   Создаёт временный граф-файл и репо, запускает выполнить-анализ с mock."
+  (let* ((tmp-dir (uiop:ensure-directory-pathname
+                    (merge-pathnames "tmp-agent-test/" (uiop:temporary-directory))))
+         (граф-путь (merge-pathnames "test-graph.md" tmp-dir))
+         (репо-dir (merge-pathnames "repo/" tmp-dir))
+         (py-файл (merge-pathnames "services.py" репо-dir)))
+    (unwind-protect
+        (progn
+          ;; Создать временные файлы
+          (ensure-directories-exist граф-путь)
+          (ensure-directories-exist py-файл)
+
+          ;; Записать граф
+          (with-open-file (f граф-путь :direction :output :if-exists :supersede
+                                        :external-format :utf-8)
+            (write-string "flowchart TD
+A0[\"Создать заказ\"]
+A1[\"Оплатить\"]
+A2{\"Оплата OK?\"}
+ERR1[\"Ошибка оплаты\"]
+OK1[\"Заказ завершён\"]
+A0 --> A1
+A1 --> A2
+A2 -->|\"Да\"| OK1
+A2 -->|\"Нет\"| ERR1" f))
+
+          ;; Записать Python-файл
+          (with-open-file (f py-файл :direction :output :if-exists :supersede
+                                      :external-format :utf-8)
+            (write-string "def create_order(request):
+    order = Order.objects.create(user=request.user)
+    return order
+
+def process_payment(order):
+    result = gateway.charge(order.total)
+    if not result.success:
+        raise PaymentError(result.message)
+    order.status = 'paid'
+    order.save()
+" f))
+
+          ;; Mock LLM: 3 шага — bfs_predecessors, report_finding, finish
+          (let ((шаг 0))
+            (flet ((mock-llm (сообщения)
+                     (declare (ignore сообщения))
+                     (incf шаг)
+                     (cond
+                       ((= шаг 1)
+                        ;; Шаг 1: исследовать предшественников ERR1
+                        (mock-ответ-с-tools
+                         (list (mock-tool-call "call_1" "bfs_predecessors"
+                                               "{\"node_id\":\"ERR1\",\"depth\":2}"))))
+                       ((= шаг 2)
+                        ;; Шаг 2: найти функцию
+                        (mock-ответ-с-tools
+                         (list (mock-tool-call "call_2" "find_function"
+                                               "{\"name\":\"create_order\"}"))))
+                       ((= шаг 3)
+                        ;; Шаг 3: зафиксировать finding
+                        (mock-ответ-с-tools
+                         (list (mock-tool-call "call_3" "report_finding"
+                                               "{\"node\":\"ERR1\",\"category\":\"compensation_gap\",\"description\":\"Order created in A0 but not deleted on payment error\",\"severity\":\"critical\",\"code_ref\":\"services.py:2\",\"recommendation\":\"Add order.delete() in ERR1 handler\"}"))))
+                       (t
+                        ;; Шаг 4: завершить
+                        (mock-ответ-с-tools
+                         (list (mock-tool-call "call_4" "finish"
+                                               "{\"summary\":\"Found 1 critical compensation gap\"}")))))))
+
+              ;; Запуск полного pipeline
+              (проверить "интеграция — полный pipeline"
+                (let ((отчёт (выполнить-анализ (namestring граф-путь)
+                                                (namestring репо-dir)
+                                                :вызвать-llm-fn #'mock-llm)))
+                  (assert (stringp отчёт) ()
+                          "Отчёт не строка: ~A" (type-of отчёт))
+                  (assert (search "test-graph" отчёт) ()
+                          "Нет имени графа в отчёте: ~A" отчёт)
+                  (assert (search "Находок: 1" отчёт) ()
+                          "Нет счётчика находок: ~A" отчёт)
+                  (assert (search "ERR1" отчёт) ()
+                          "Нет ERR1 в отчёте: ~A" отчёт)
+                  (assert (search "Компенсация" отчёт) ()
+                          "Нет категории в отчёте: ~A" отчёт)
+                  (assert (search "services.py:2" отчёт) ()
+                          "Нет code_ref в отчёте: ~A" отчёт)))
+
+              ;; Тест: ошибка API → partial results
+              (проверить "интеграция — ошибка API → partial results"
+                (let ((api-вызовов 0))
+                  (flet ((mock-llm-error (сообщения)
+                           (declare (ignore сообщения))
+                           (incf api-вызовов)
+                           (if (= api-вызовов 1)
+                               ;; Первый вызов — report_finding
+                               (mock-ответ-с-tools
+                                (list (mock-tool-call "call_e1" "report_finding"
+                                                      "{\"node\":\"A2\",\"category\":\"edge_case\",\"description\":\"Branch not covered\",\"severity\":\"warning\"}")))
+                               ;; Второй вызов — ошибка API
+                               (error "Connection timed out"))))
+                    (let ((отчёт (выполнить-анализ (namestring граф-путь)
+                                                    (namestring репо-dir)
+                                                    :вызвать-llm-fn #'mock-llm-error)))
+                      ;; Должен содержать partial results + системное предупреждение
+                      (assert (search "test-graph" отчёт) ()
+                              "Partial: нет имени графа: ~A" отчёт)
+                      (assert (search "Branch not covered" отчёт) ()
+                              "Partial: нет finding: ~A" отчёт)
+                      (assert (search "Анализ прерван" отчёт) ()
+                              "Partial: нет предупреждения о прерывании: ~A" отчёт)))))
+
+              ;; Тест: пустой граф
+              (let ((пустой-граф (merge-pathnames "empty-graph.md" tmp-dir)))
+                (with-open-file (f пустой-граф :direction :output :if-exists :supersede
+                                               :external-format :utf-8)
+                  (write-string "just some text without mermaid nodes" f))
+                (проверить "интеграция — пустой граф"
+                  (let ((отчёт (выполнить-анализ (namestring пустой-граф)
+                                                  (namestring репо-dir))))
+                    (assert (search "не содержит узлов" отчёт) ()
+                            "Ожидалось предупреждение о пустом графе: ~A" отчёт)))))))
+
+      ;; Cleanup
+      (uiop:delete-directory-tree tmp-dir :validate t :if-does-not-exist :ignore))))
+
 (defun тест-всё ()
   "Запуск всех тестов."
   (setf *тест-ошибок* 0)
@@ -1140,6 +1509,9 @@ A0 --> ERR1"))
   (тест-извлечь-tool-calls)
   (тест-выполнить-tool)
   (тест-tool-loop)
+  (тест-отформатировать-отчёт)
+  (тест-выполнить-аргументы)
+  (тест-интеграция)
   (format t "~%Ошибок: ~A~%" *тест-ошибок*)
   (when (plusp *тест-ошибок*)
     (error "~A тестов провалено" *тест-ошибок*))
