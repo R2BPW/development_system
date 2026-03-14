@@ -101,3 +101,19 @@
                        (%json-error (format nil "Flow '~A' not found" flow) 404)))
                (error (e)
                  (%json-error (format nil "~A" e) 500))))))))
+
+(hunchentoot:define-easy-handler (api-spawn-flow :uri "/api/flows/spawn"
+                                                  :default-request-type :post) ()
+  (if (not (%check-auth hunchentoot:*request*))
+      (%json-error "Unauthorized" 401)
+      (let* ((body (hunchentoot:raw-post-data :force-text t))
+             (json (cl-json:decode-json-from-string body))
+             (description (cdr (assoc :description json))))
+        (if (null description)
+            (%json-error "Missing 'description' field" 400)
+            (handler-case
+                (let* ((command (concatenate 'string "/породить " description))
+                       (result (обработать-команду 0 command)))
+                  (%json-ok `((:result . ,result))))
+              (error (e)
+                (%json-error (format nil "~A" e) 500)))))))

@@ -28,7 +28,7 @@ Hunchentoot (порт 7070) ↕ Мастер (SBCL)
 
 - [x] **[HTTP-ROUTES]** Добавить в `мастер/cl/http.lisp` роуты через `hunchentoot:define-easy-handler`. Роуты: GET `/api/flows` — проверить auth, вернуть `{"flows": [...]}` из `(активные-потоки)`; POST `/api/dialog` — принять JSON body `{"text":"..."}`, вызвать `(обработать-команду 0 text)`, вернуть `{"response":"..."}` (использовать chat-id=0 для web-сессии); POST `/api/flows/run` — JSON `{"flow":"...","task":"..."}`, вызвать `(запустить-поток flow task)`, вернуть `{"result":"..."}`. Каждый роут проверяет auth через %check-auth, при неудаче возвращает 401.
 
-- [ ] **[HTTP-SPAWN]** Добавить в `мастер/cl/http.lisp` роут POST `/api/flows/spawn`. Принять JSON `{"description":"..."}`. Вызвать `(обработать-команду 0 (concatenate 'string "/породить " description))`. Вернуть `{"result":"..."}`.
+- [x] **[HTTP-SPAWN]** Добавить в `мастер/cl/http.lisp` роут POST `/api/flows/spawn`. Принять JSON `{"description":"..."}`. Вызвать `(обработать-команду 0 (concatenate 'string "/породить " description))`. Вернуть `{"result":"..."}`.
 
 - [ ] **[HTTP-THREAD]** Обновить `мастер/cl/main.lisp`. В функцию `start` добавить в начало: запуск HTTP-сервера через `(bt:make-thread #'start-http-server :name "http-server")`. Добавить импорт bordeaux-threads если нужно.
 
