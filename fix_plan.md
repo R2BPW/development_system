@@ -74,7 +74,7 @@ export default defineConfig({ plugins: [react()], base: '/' })
 ```
 Создать `web/public/icon.svg` — простая иконка: тёмный фон #141414, буква "М" белым цветом по центру, viewBox="0 0 192 192", размер 192x192.
 
-- [ ] **[WEB-STYLES]** Создать `web/src/styles/global.css` с CSS переменными:
+- [x] **[WEB-STYLES]** Создать `web/src/styles/global.css` с CSS переменными:
 ```css
 :root {
   --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
