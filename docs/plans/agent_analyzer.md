@@ -332,11 +332,11 @@ Agent: tool_call: finish("Проанализировал ERR1. Найдена 1 
 
 ### Task 4: LLM с tool_use + dispatcher + tool-loop
 
-- [ ] 4.1 `вызвать-llm-tools` — POST с tools parameter, парсинг tool_calls из ответа
-- [ ] 4.2 `извлечь-tool-calls` — извлечение tool_calls из JSON-ответа OpenRouter
-- [ ] 4.3 `выполнить-tool` — dispatcher: имя → вызов соответствующей функции
-- [ ] 4.4 `tool-loop` — рекурсивный loop: LLM → extract → dispatch → append → repeat
-- [ ] 4.5 Тесты с mock LLM — dispatcher routing, loop termination
+- [x] 4.1 `вызвать-llm-tools` — POST с tools parameter, парсинг tool_calls из ответа
+- [x] 4.2 `извлечь-tool-calls` — извлечение tool_calls из JSON-ответа OpenRouter
+- [x] 4.3 `выполнить-tool` — dispatcher: имя → вызов соответствующей функции
+- [x] 4.4 `tool-loop` — рекурсивный loop: LLM → extract → dispatch → append → repeat
+- [x] 4.5 Тесты с mock LLM — dispatcher routing, loop termination
 
 ---
 

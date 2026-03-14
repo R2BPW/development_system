@@ -422,6 +422,186 @@
         (cons :findings-count (length findings))))
 
 ;; ════════════════════════════════════════════════════════════════
+;; LLM с tool_use
+;; ════════════════════════════════════════════════════════════════
+
+(defun вызвать-llm-tools (сообщения &optional tools)
+  "POST к OpenRouter с tools parameter. Возвращает parsed JSON ответ (alist).
+   СООБЩЕНИЯ — список сообщений (alist с :role/:content).
+   TOOLS — список tool-схем (по умолчанию *tools-schema*)."
+  (let* ((tools (or tools *tools-schema*))
+         (тело (cl-json:encode-json-to-string
+                `((:model . ,(модель-апи))
+                  (:messages . ,(coerce сообщения 'vector))
+                  (:tools . ,(coerce tools 'vector))
+                  (:max--tokens . 4000))))
+         (сырой (dexador:post
+                 "https://openrouter.ai/api/v1/chat/completions"
+                 :content тело
+                 :headers `(("Content-Type"  . "application/json")
+                            ("Authorization" . ,(format nil "Bearer ~A" (ключ-апи))))
+                 :read-timeout 90 :connect-timeout 30))
+         (строка (if (stringp сырой) сырой
+                     (sb-ext:octets-to-string сырой :external-format :utf-8))))
+    (cl-json:decode-json-from-string строка)))
+
+(defun извлечь-tool-calls (ответ)
+  "Извлечь tool_calls из JSON-ответа OpenRouter.
+   Возвращает список alist'ов с :id, :function.name, :function.arguments,
+   или NIL если нет tool_calls."
+  (let* ((choices (cdr (assoc :choices ответ)))
+         (первый (and choices (car choices)))
+         (message (cdr (assoc :message первый)))
+         (tool-calls (cdr (assoc :tool--calls message))))
+    (when tool-calls
+      (mapcar (lambda (tc)
+                (let* ((id (cdr (assoc :id tc)))
+                       (fn (cdr (assoc :function tc)))
+                       (имя (cdr (assoc :name fn)))
+                       (args-raw (cdr (assoc :arguments fn)))
+                       (args (if (stringp args-raw)
+                                 (handler-case
+                                     (cl-json:decode-json-from-string args-raw)
+                                   (error () nil))
+                                 args-raw)))
+                  (list (cons :id id)
+                        (cons :name имя)
+                        (cons :arguments args))))
+              tool-calls))))
+
+(defun извлечь-контент (ответ)
+  "Извлечь текстовый content из JSON-ответа OpenRouter."
+  (let* ((choices (cdr (assoc :choices ответ)))
+         (первый (and choices (car choices)))
+         (message (cdr (assoc :message первый))))
+    (cdr (assoc :content message))))
+
+(defun assistant-msg-из-ответа (ответ)
+  "Извлечь полное assistant message из ответа для добавления в историю."
+  (let* ((choices (cdr (assoc :choices ответ)))
+         (первый (and choices (car choices))))
+    (cdr (assoc :message первый))))
+
+;; ════════════════════════════════════════════════════════════════
+;; Dispatcher
+;; ════════════════════════════════════════════════════════════════
+
+(defun выполнить-tool (имя аргументы узлы рёбра репо-путь индекс findings)
+  "Dispatcher: имя tool → вызов реализации. Возвращает строку-результат.
+   ИМЯ — строка (имя tool), АРГУМЕНТЫ — alist параметров."
+  (handler-case
+      (cond
+        ((string= имя "search_in_file")
+         (tool-search-in-file репо-путь
+                              (cdr (assoc :path аргументы))
+                              (cdr (assoc :pattern аргументы))))
+        ((string= имя "read_lines")
+         (tool-read-lines репо-путь
+                          (cdr (assoc :path аргументы))
+                          (or (cdr (assoc :start аргументы)) 1)
+                          (or (cdr (assoc :end аргументы)) 50)))
+        ((string= имя "find_function")
+         (tool-find-function индекс
+                             (cdr (assoc :name аргументы))))
+        ((string= имя "bfs_predecessors")
+         (tool-bfs-predecessors узлы рёбра
+                                (cdr (assoc :node--id аргументы))
+                                (or (cdr (assoc :depth аргументы)) 3)))
+        ((string= имя "bfs_successors")
+         (tool-bfs-successors узлы рёбра
+                              (cdr (assoc :node--id аргументы))
+                              (or (cdr (assoc :depth аргументы)) 3)))
+        ((string= имя "get_node_label")
+         (tool-get-node-label узлы
+                              (cdr (assoc :node--id аргументы))))
+        ((string= имя "report_finding")
+         (tool-report-finding findings
+                              (cdr (assoc :node аргументы))
+                              (cdr (assoc :category аргументы))
+                              (cdr (assoc :description аргументы))
+                              (cdr (assoc :severity аргументы))
+                              (cdr (assoc :code--ref аргументы))
+                              (cdr (assoc :recommendation аргументы))))
+        ((string= имя "finish")
+         (tool-finish findings (cdr (assoc :summary аргументы)))
+         ;; Возвращаем специальную строку-маркер для finish
+         (format nil "<<FINISH>>~A" (cdr (assoc :summary аргументы))))
+        (t (format nil "ERROR: Unknown tool '~A'" имя)))
+    (error (e)
+      (format nil "ERROR: Tool '~A' failed: ~A" имя e))))
+
+;; ════════════════════════════════════════════════════════════════
+;; Tool-loop
+;; ════════════════════════════════════════════════════════════════
+
+(defun сообщение-tool-result (id содержимое)
+  "Создать tool result message для отправки обратно LLM."
+  (list (cons :role "tool")
+        (cons :tool--call--id id)
+        (cons :content содержимое)))
+
+(defun tool-loop (сообщения узлы рёбра репо-путь индекс findings
+                  &key (вызвать-llm-fn #'вызвать-llm-tools) (счётчик 0))
+  "Рекурсивный tool-loop: LLM → extract tool_calls → dispatch → append → repeat.
+   Завершается при: finish tool, нет tool_calls, или лимит вызовов.
+   ВЫЗВАТЬ-LLM-FN — функция для вызова LLM (для тестирования можно подменить).
+   Возвращает findings вектор."
+  (when (>= счётчик *макс-tool-calls*)
+    (format t "[tool-loop] Лимит ~A tool calls достигнут~%" *макс-tool-calls*)
+    (return-from tool-loop findings))
+
+  (let* ((ответ (funcall вызвать-llm-fn сообщения))
+         (tool-calls (извлечь-tool-calls ответ)))
+
+    ;; Нет tool calls → агент закончил текстом
+    (unless tool-calls
+      (format t "[tool-loop] Нет tool calls, завершение~%")
+      (return-from tool-loop findings))
+
+    ;; Добавить assistant message в историю
+    (let ((assistant-msg (assistant-msg-из-ответа ответ))
+          (новые-сообщения (copy-list сообщения))
+          (finish? nil))
+
+      ;; Добавляем assistant message
+      (setf новые-сообщения
+            (append новые-сообщения (list assistant-msg)))
+
+      ;; Выполнить каждый tool call и собрать results
+      (dolist (tc tool-calls)
+        (let* ((id (cdr (assoc :id tc)))
+               (имя (cdr (assoc :name tc)))
+               (args (cdr (assoc :arguments tc)))
+               (результат (выполнить-tool имя args узлы рёбра
+                                          репо-путь индекс findings)))
+          (format t "[tool-loop] ~A(~{~A=~A~^, ~}) → ~A~%"
+                  имя
+                  (loop for (k . v) in args
+                        collect (string-downcase (symbol-name k))
+                        collect (if (stringp v) v (format nil "~A" v)))
+                  (subseq результат 0 (min 80 (length результат))))
+
+          ;; Проверка finish
+          (when (and (>= (length результат) 10)
+                     (string= (subseq результат 0 10) "<<FINISH>>"))
+            (setf finish? t))
+
+          ;; Добавить tool result в историю
+          (setf новые-сообщения
+                (append новые-сообщения
+                        (list (сообщение-tool-result id результат))))))
+
+      ;; Если finish — выход
+      (when finish?
+        (format t "[tool-loop] Finish вызван, завершение~%")
+        (return-from tool-loop findings))
+
+      ;; Рекурсия
+      (tool-loop новые-сообщения узлы рёбра репо-путь индекс findings
+                 :вызвать-llm-fn вызвать-llm-fn
+                 :счётчик (+ счётчик (length tool-calls))))))
+
+;; ════════════════════════════════════════════════════════════════
 ;; Тесты
 ;; ════════════════════════════════════════════════════════════════
 
@@ -729,6 +909,219 @@ A0 --> ERR1"))
         (assert (= (cdr (assoc :findings-count рез)) 2) ()
                 "findings-count не 2: ~A" рез)))))
 
+(defun mock-tool-call (id имя arguments-json)
+  "Создать mock tool_call alist."
+  (list (cons :id id)
+        (cons :type "function")
+        (cons :function
+              (list (cons :name имя)
+                    (cons :arguments arguments-json)))))
+
+(defun mock-ответ-с-tools (tool-calls)
+  "Создать mock OpenRouter ответ с tool_calls."
+  (list (cons :choices
+              (list (list (cons :message
+                                (list (cons :role "assistant")
+                                      (cons :content nil)
+                                      (cons :tool--calls tool-calls))))))))
+
+(defun mock-ответ-текст (текст)
+  "Создать mock OpenRouter ответ с текстом (без tool_calls)."
+  (list (cons :choices
+              (list (list (cons :message
+                                (list (cons :role "assistant")
+                                      (cons :content текст))))))))
+
+(defun тест-извлечь-tool-calls ()
+  "Тест извлечь-tool-calls на синтетическом JSON-ответе."
+  ;; Ответ с tool_calls
+  (проверить "извлечь-tool-calls — с tool_calls"
+    (let* ((mock (mock-ответ-с-tools
+                  (list (mock-tool-call "call_abc123" "search_in_file"
+                                        "{\"path\":\"views.py\",\"pattern\":\"def create\"}"))))
+           (tc (извлечь-tool-calls mock)))
+      (assert (= (length tc) 1) ()
+              "Ожидался 1 tool call, получено ~A" (length tc))
+      (let ((первый (first tc)))
+        (assert (string= (cdr (assoc :id первый)) "call_abc123") ()
+                "id не совпадает")
+        (assert (string= (cdr (assoc :name первый)) "search_in_file") ()
+                "name не совпадает")
+        (let ((args (cdr (assoc :arguments первый))))
+          (assert (string= (cdr (assoc :path args)) "views.py") ()
+                  "path аргумента не совпадает")))))
+
+  ;; Ответ без tool_calls (текстовый ответ)
+  (проверить "извлечь-tool-calls — без tool_calls"
+    (let ((tc (извлечь-tool-calls (mock-ответ-текст "Analysis complete"))))
+      (assert (null tc) ()
+              "Ожидался NIL для ответа без tool_calls: ~A" tc)))
+
+  ;; Ответ с несколькими tool_calls
+  (проверить "извлечь-tool-calls — несколько tool_calls"
+    (let* ((mock (mock-ответ-с-tools
+                  (list (mock-tool-call "call_1" "get_node_label"
+                                        "{\"node_id\":\"ERR1\"}")
+                        (mock-tool-call "call_2" "bfs_predecessors"
+                                        "{\"node_id\":\"ERR1\",\"depth\":2}"))))
+           (tc (извлечь-tool-calls mock)))
+      (assert (= (length tc) 2) ()
+              "Ожидалось 2 tool calls, получено ~A" (length tc)))))
+
+(defun тест-выполнить-tool ()
+  "Тест dispatcher выполнить-tool."
+  (let ((тест-граф "flowchart TD
+A0[\"Создать заказ\"]
+ERR1[\"Ошибка оплаты\"]
+A0 --> ERR1"))
+    (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
+      (let* ((мой-абс (merge-pathnames *мой-путь* (uiop:getcwd)))
+             (репо-путь (directory-namestring мой-абс))
+             (индекс (индексировать-репо репо-путь))
+             (findings (make-array 0 :adjustable t :fill-pointer 0)))
+
+        ;; Dispatch search_in_file
+        (проверить "выполнить-tool — search_in_file"
+          (let ((рез (выполнить-tool "search_in_file"
+                                     `((:path . ,(file-namestring мой-абс))
+                                       (:pattern . "defun ключ-апи"))
+                                     узлы рёбра репо-путь индекс findings)))
+            (assert (search "ключ-апи" рез) ()
+                    "search_in_file не нашёл: ~A" рез)))
+
+        ;; Dispatch find_function
+        (проверить "выполнить-tool — find_function"
+          (let ((рез (выполнить-tool "find_function"
+                                     '((:name . "ключ-апи"))
+                                     узлы рёбра репо-путь индекс findings)))
+            (assert (search "ключ-апи" рез) ()
+                    "find_function не нашёл: ~A" рез)))
+
+        ;; Dispatch get_node_label
+        (проверить "выполнить-tool — get_node_label"
+          (let ((рез (выполнить-tool "get_node_label"
+                                     '((:node--id . "A0"))
+                                     узлы рёбра репо-путь индекс findings)))
+            (assert (search "Создать заказ" рез) ()
+                    "get_node_label не нашёл: ~A" рез)))
+
+        ;; Dispatch bfs_predecessors
+        (проверить "выполнить-tool — bfs_predecessors"
+          (let ((рез (выполнить-tool "bfs_predecessors"
+                                     '((:node--id . "ERR1") (:depth . 1))
+                                     узлы рёбра репо-путь индекс findings)))
+            (assert (search "A0" рез) ()
+                    "bfs_predecessors не нашёл A0: ~A" рез)))
+
+        ;; Dispatch report_finding
+        (проверить "выполнить-tool — report_finding"
+          (let ((рез (выполнить-tool "report_finding"
+                                     '((:node . "ERR1")
+                                       (:category . "compensation_gap")
+                                       (:description . "Test issue")
+                                       (:severity . "warning"))
+                                     узлы рёбра репо-путь индекс findings)))
+            (assert (search "Finding recorded" рез) ()
+                    "report_finding не подтвердил: ~A" рез)
+            (assert (= (length findings) 1) ()
+                    "findings не обновлён")))
+
+        ;; Dispatch finish
+        (проверить "выполнить-tool — finish"
+          (let ((рез (выполнить-tool "finish"
+                                     '((:summary . "Done"))
+                                     узлы рёбра репо-путь индекс findings)))
+            (assert (search "<<FINISH>>" рез) ()
+                    "finish не вернул маркер: ~A" рез)))
+
+        ;; Unknown tool
+        (проверить "выполнить-tool — unknown tool"
+          (let ((рез (выполнить-tool "nonexistent_tool"
+                                     '()
+                                     узлы рёбра репо-путь индекс findings)))
+            (assert (search "ERROR" рез) ()
+                    "Ожидалась ошибка: ~A" рез)))))))
+
+(defun тест-tool-loop ()
+  "Тест tool-loop с mock LLM."
+  (let ((тест-граф "flowchart TD
+A0[\"Создать заказ\"]
+ERR1[\"Ошибка оплаты\"]
+A0 --> ERR1"))
+    (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
+      (let* ((мой-абс (merge-pathnames *мой-путь* (uiop:getcwd)))
+             (репо-путь (directory-namestring мой-абс))
+             (индекс (индексировать-репо репо-путь))
+             (findings (make-array 0 :adjustable t :fill-pointer 0)))
+
+        ;; Mock LLM: step 1 — get_node_label, step 2 — report_finding, step 3 — finish
+        (let ((шаг 0))
+          (flet ((mock-llm (сообщения)
+                   (declare (ignore сообщения))
+                   (incf шаг)
+                   (cond
+                     ((= шаг 1)
+                      (mock-ответ-с-tools
+                       (list (mock-tool-call "call_1" "get_node_label"
+                                             "{\"node_id\":\"ERR1\"}"))))
+                     ((= шаг 2)
+                      (mock-ответ-с-tools
+                       (list (mock-tool-call "call_2" "report_finding"
+                                             "{\"node\":\"ERR1\",\"category\":\"compensation_gap\",\"description\":\"Missing rollback\",\"severity\":\"critical\"}"))))
+                     (t
+                      (mock-ответ-с-tools
+                       (list (mock-tool-call "call_3" "finish"
+                                             "{\"summary\":\"Found 1 issue\"}")))))))
+
+            (проверить "tool-loop — полный цикл с mock LLM"
+              (let ((начальные-сообщения
+                      (list (list (cons :role "user")
+                                  (cons :content "Analyze the graph")))))
+                (tool-loop начальные-сообщения узлы рёбра
+                           репо-путь индекс findings
+                           :вызвать-llm-fn #'mock-llm))
+              (assert (= шаг 3) ()
+                      "Ожидалось 3 вызова LLM, было ~A" шаг)
+              (assert (= (length findings) 1) ()
+                      "Ожидался 1 finding, получено ~A" (length findings))
+              (let ((f (aref findings 0)))
+                (assert (string= (cdr (assoc :node f)) "ERR1") ()
+                        "finding node не ERR1")
+                (assert (string= (cdr (assoc :severity f)) "critical") ()
+                        "finding severity не critical")))))
+
+        ;; Тест: завершение при текстовом ответе (нет tool_calls)
+        (let ((findings2 (make-array 0 :adjustable t :fill-pointer 0)))
+          (flet ((mock-llm-text (сообщения)
+                   (declare (ignore сообщения))
+                   (mock-ответ-текст "All done, no tools needed")))
+            (проверить "tool-loop — завершение при текстовом ответе"
+              (tool-loop (list (list (cons :role "user")
+                                    (cons :content "Test")))
+                         узлы рёбра репо-путь индекс findings2
+                         :вызвать-llm-fn #'mock-llm-text)
+              (assert (= (length findings2) 0) ()
+                      "findings должен быть пустым"))))
+
+        ;; Тест: лимит tool calls
+        (let ((findings3 (make-array 0 :adjustable t :fill-pointer 0))
+              (*макс-tool-calls* 2)
+              (вызовов 0))
+          (flet ((mock-llm-infinite (сообщения)
+                   (declare (ignore сообщения))
+                   (incf вызовов)
+                   (mock-ответ-с-tools
+                    (list (mock-tool-call (format nil "call_~A" вызовов)
+                                          "get_node_label"
+                                          "{\"node_id\":\"A0\"}")))))
+            (проверить "tool-loop — лимит вызовов"
+              (tool-loop (list (list (cons :role "user")
+                                    (cons :content "Test")))
+                         узлы рёбра репо-путь индекс findings3
+                         :вызвать-llm-fn #'mock-llm-infinite)
+              (assert (<= вызовов 3) ()
+                      "Слишком много вызовов: ~A (лимит 2)" вызовов))))))))
+
 (defun тест-всё ()
   "Запуск всех тестов."
   (setf *тест-ошибок* 0)
@@ -744,6 +1137,9 @@ A0 --> ERR1"))
   (тест-tool-get-node-label)
   (тест-tool-report-finding)
   (тест-tool-finish)
+  (тест-извлечь-tool-calls)
+  (тест-выполнить-tool)
+  (тест-tool-loop)
   (format t "~%Ошибок: ~A~%" *тест-ошибок*)
   (when (plusp *тест-ошибок*)
     (error "~A тестов провалено" *тест-ошибок*))
