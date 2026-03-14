@@ -260,6 +260,65 @@
              (:required "summary"))))))))
 
 ;; ════════════════════════════════════════════════════════════════
+;; Tool implementations — код-навигация
+;; ════════════════════════════════════════════════════════════════
+
+(defun tool-search-in-file (репо-путь путь паттерн)
+  "Поиск regex-паттерна в файле. Возвращает строку с совпадениями (номер: текст).
+   ПУТЬ — относительный путь от корня репо. ПАТТЕРН — regex."
+  (let* ((полный-путь (merge-pathnames путь (uiop:ensure-directory-pathname репо-путь)))
+         (содержимое (handler-case (читать-файл (namestring полный-путь))
+                       (error () (return-from tool-search-in-file
+                                   (format nil "ERROR: File not found: ~A" путь)))))
+         (строки (разбить-строки содержимое))
+         (scanner (handler-case (cl-ppcre:create-scanner паттерн)
+                    (error () (return-from tool-search-in-file
+                                (format nil "ERROR: Invalid regex: ~A" паттерн)))))
+         (результат '()))
+    (loop for строка in строки
+          for номер from 1
+          when (cl-ppcre:scan scanner строка)
+            do (push (format nil "~D: ~A" номер строка) результат))
+    (if результат
+        (format nil "~{~A~^~%~}" (nreverse результат))
+        (format nil "No matches for pattern '~A' in ~A" паттерн путь))))
+
+(defun tool-read-lines (репо-путь путь начало конец)
+  "Чтение строк с НАЧАЛО по КОНЕЦ (включительно, 1-based) из файла.
+   ПУТЬ — относительный путь от корня репо."
+  (let* ((полный-путь (merge-pathnames путь (uiop:ensure-directory-pathname репо-путь)))
+         (содержимое (handler-case (читать-файл (namestring полный-путь))
+                       (error () (return-from tool-read-lines
+                                   (format nil "ERROR: File not found: ~A" путь)))))
+         (строки (разбить-строки содержимое))
+         (всего (length строки))
+         (н (max 1 (min начало всего)))
+         (к (max н (min конец всего)))
+         (результат '()))
+    (loop for i from н to к
+          for строка = (nth (1- i) строки)
+          do (push (format nil "~D: ~A" i строка) результат))
+    (if результат
+        (format nil "~{~A~^~%~}" (nreverse результат))
+        (format nil "ERROR: Invalid line range ~D-~D (file has ~D lines)" начало конец всего))))
+
+(defun tool-find-function (индекс имя)
+  "Найти определение функции/класса по имени в индексе репо.
+   ИНДЕКС — результат индексировать-репо, ИМЯ — имя для поиска.
+   Возвращает строку с найденными местами."
+  (let ((результат '()))
+    (dolist (фи индекс)
+      (dolist (опр (файл-инфо-определения фи))
+        (when (search (string-downcase имя)
+                      (string-downcase (car опр)))
+          (push (format nil "~A:~D (~A)"
+                        (файл-инфо-путь фи) (cdr опр) (car опр))
+                результат))))
+    (if результат
+        (format nil "~{~A~^~%~}" (nreverse результат))
+        (format nil "No definition found for '~A'" имя))))
+
+;; ════════════════════════════════════════════════════════════════
 ;; Тесты
 ;; ════════════════════════════════════════════════════════════════
 
@@ -354,6 +413,83 @@ A2 -->|\"Нет\"| ERR1"))
         (assert (= (length parsed) 8) ()
                 "Обратный парсинг: ожидалось 8 элементов")))))
 
+(defun тест-tool-search-in-file ()
+  "Тест tool-search-in-file на текущем файле."
+  (let ((репо-путь (directory-namestring
+                     (merge-pathnames *мой-путь* (uiop:getcwd))))
+        (отн-путь (file-namestring
+                    (merge-pathnames *мой-путь* (uiop:getcwd)))))
+    ;; Поиск существующей функции
+    (проверить "search-in-file находит defun"
+      (let ((рез (tool-search-in-file репо-путь отн-путь "defun ключ-апи")))
+        (assert (search "ключ-апи" рез) ()
+                "Не найден defun ключ-апи: ~A" рез)))
+    ;; Поиск несуществующего паттерна (anchored — не совпадёт с самим собой в тексте)
+    (проверить "search-in-file — нет совпадений"
+      (let ((рез (tool-search-in-file репо-путь отн-путь "^ZZZNOMATCH$")))
+        (assert (search "No matches" рез) ()
+                "Ожидалось 'No matches': ~A" рез)))
+    ;; Ошибка: несуществующий файл
+    (проверить "search-in-file — несуществующий файл"
+      (let ((рез (tool-search-in-file репо-путь "nonexistent.py" "test")))
+        (assert (search "ERROR" рез) ()
+                "Ожидалась ошибка: ~A" рез)))
+    ;; Ошибка: невалидный regex
+    (проверить "search-in-file — невалидный regex"
+      (let ((рез (tool-search-in-file репо-путь отн-путь "[invalid")))
+        (assert (search "ERROR" рез) ()
+                "Ожидалась ошибка regex: ~A" рез)))))
+
+(defun тест-tool-read-lines ()
+  "Тест tool-read-lines на текущем файле."
+  (let ((репо-путь (directory-namestring
+                     (merge-pathnames *мой-путь* (uiop:getcwd))))
+        (отн-путь (file-namestring
+                    (merge-pathnames *мой-путь* (uiop:getcwd)))))
+    ;; Чтение первых 3 строк
+    (проверить "read-lines — первые строки"
+      (let ((рез (tool-read-lines репо-путь отн-путь 1 3)))
+        (assert (search "1:" рез) ()
+                "Не найдена строка 1: ~A" рез)
+        (assert (search "3:" рез) ()
+                "Не найдена строка 3: ~A" рез)))
+    ;; Чтение одной строки
+    (проверить "read-lines — одна строка"
+      (let ((рез (tool-read-lines репо-путь отн-путь 1 1)))
+        (assert (search "1:" рез) ()
+                "Не найдена строка 1: ~A" рез)
+        ;; Не должно быть строки 2
+        (assert (not (search "2:" рез)) ()
+                "Лишняя строка 2: ~A" рез)))
+    ;; Несуществующий файл
+    (проверить "read-lines — несуществующий файл"
+      (let ((рез (tool-read-lines репо-путь "nonexistent.py" 1 5)))
+        (assert (search "ERROR" рез) ()
+                "Ожидалась ошибка: ~A" рез)))))
+
+(defun тест-tool-find-function ()
+  "Тест tool-find-function на индексе текущего каталога."
+  (let* ((мой-абс (merge-pathnames *мой-путь* (uiop:getcwd)))
+         (каталог (directory-namestring мой-абс))
+         (индекс (индексировать-репо каталог)))
+    ;; Поиск существующей функции
+    (проверить "find-function находит ключ-апи"
+      (let ((рез (tool-find-function индекс "ключ-апи")))
+        (assert (search "ключ-апи" рез) ()
+                "Не найдена ключ-апи: ~A" рез)
+        (assert (search ".lisp:" рез) ()
+                "Нет пути к файлу: ~A" рез)))
+    ;; Частичное совпадение имени
+    (проверить "find-function — частичное совпадение"
+      (let ((рез (tool-find-function индекс "tool-search")))
+        (assert (search "tool-search-in-file" рез) ()
+                "Не найдена tool-search-in-file: ~A" рез)))
+    ;; Несуществующая функция (имя не встречается ни в одном определении)
+    (проверить "find-function — не найдена"
+      (let ((рез (tool-find-function индекс "qqq_нет_такой_999")))
+        (assert (search "No definition" рез) ()
+                "Ожидалось 'No definition': ~A" рез)))))
+
 (defun тест-всё ()
   "Запуск всех тестов."
   (setf *тест-ошибок* 0)
@@ -361,6 +497,9 @@ A2 -->|\"Нет\"| ERR1"))
   (тест-индексация)
   (тест-граф-парсер)
   (тест-tools-schema)
+  (тест-tool-search-in-file)
+  (тест-tool-read-lines)
+  (тест-tool-find-function)
   (format t "~%Ошибок: ~A~%" *тест-ошибок*)
   (when (plusp *тест-ошибок*)
     (error "~A тестов провалено" *тест-ошибок*))

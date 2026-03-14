@@ -312,10 +312,10 @@ Agent: tool_call: finish("Проанализировал ERR1. Найдена 1 
 
 ### Task 2: Tool implementations — код-навигация
 
-- [ ] 2.1 `tool-search-in-file` — cl-ppcre:scan по строкам файла, возврат совпадений с номерами строк
-- [ ] 2.2 `tool-read-lines` — чтение строк N-M из файла (через кэш)
-- [ ] 2.3 `tool-find-function` — lookup в кэше индексации по имени функции/класса
-- [ ] 2.4 Тесты code-navigation tools на fixture-файлах
+- [x] 2.1 `tool-search-in-file` — cl-ppcre:scan по строкам файла, возврат совпадений с номерами строк
+- [x] 2.2 `tool-read-lines` — чтение строк N-M из файла (через кэш)
+- [x] 2.3 `tool-find-function` — lookup в кэше индексации по имени функции/класса
+- [x] 2.4 Тесты code-navigation tools на fixture-файлах
 
 ---
 
