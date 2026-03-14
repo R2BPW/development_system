@@ -32,10 +32,9 @@
 (defun читать-файл (путь)
   "Прочитать файл целиком в строку."
   (with-open-file (f путь :external-format :utf-8)
-    (let ((buf (make-string (file-length f))))
-      (read-sequence buf f)
-      ;; file-length может вернуть больше чем реальных символов для UTF-8
-      (string-right-trim '(#\Nul) buf))))
+    (let* ((buf (make-string (file-length f)))
+           (n (read-sequence buf f)))
+      (subseq buf 0 n))))
 
 (defun разбить-строки (текст)
   (uiop:split-string текст :separator '(#\Newline)))
@@ -263,11 +262,23 @@
 ;; Tool implementations — код-навигация
 ;; ════════════════════════════════════════════════════════════════
 
+(defun безопасный-путь? (полный-путь репо-путь)
+  "Проверить что ПОЛНЫЙ-ПУТЬ находится внутри РЕПО-ПУТЬ (защита от path traversal)."
+  (let ((resolved (namestring (truename полный-путь)))
+        (repo-resolved (namestring (truename (uiop:ensure-directory-pathname репо-путь)))))
+    (uiop:string-prefix-p repo-resolved resolved)))
+
 (defun tool-search-in-file (репо-путь путь паттерн)
   "Поиск regex-паттерна в файле. Возвращает строку с совпадениями (номер: текст).
    ПУТЬ — относительный путь от корня репо. ПАТТЕРН — regex."
   (let* ((полный-путь (merge-pathnames путь (uiop:ensure-directory-pathname репо-путь)))
-         (содержимое (handler-case (читать-файл (namestring полный-путь))
+         (содержимое (handler-case
+                         (progn
+                           (unless (and (probe-file полный-путь)
+                                        (безопасный-путь? полный-путь репо-путь))
+                             (return-from tool-search-in-file
+                               (format nil "ERROR: File not found or outside repo: ~A" путь)))
+                           (читать-файл (namestring полный-путь)))
                        (error () (return-from tool-search-in-file
                                    (format nil "ERROR: File not found: ~A" путь)))))
          (строки (разбить-строки содержимое))
@@ -287,7 +298,13 @@
   "Чтение строк с НАЧАЛО по КОНЕЦ (включительно, 1-based) из файла.
    ПУТЬ — относительный путь от корня репо."
   (let* ((полный-путь (merge-pathnames путь (uiop:ensure-directory-pathname репо-путь)))
-         (содержимое (handler-case (читать-файл (namestring полный-путь))
+         (содержимое (handler-case
+                         (progn
+                           (unless (and (probe-file полный-путь)
+                                        (безопасный-путь? полный-путь репо-путь))
+                             (return-from tool-read-lines
+                               (format nil "ERROR: File not found or outside repo: ~A" путь)))
+                           (читать-файл (namestring полный-путь)))
                        (error () (return-from tool-read-lines
                                    (format nil "ERROR: File not found: ~A" путь)))))
          (строки (разбить-строки содержимое))
@@ -295,8 +312,9 @@
          (н (max 1 (min начало всего)))
          (к (max н (min конец всего)))
          (результат '()))
-    (loop for i from н to к
-          for строка = (nth (1- i) строки)
+    ;; nthcdr для O(n) вместо O(n*k) при доступе через nth
+    (loop for строка in (nthcdr (1- н) строки)
+          for i from н to к
           do (push (format nil "~D: ~A" i строка) результат))
     (if результат
         (format nil "~{~A~^~%~}" (nreverse результат))
@@ -322,69 +340,54 @@
 ;; Tool implementations — граф-навигация
 ;; ════════════════════════════════════════════════════════════════
 
-(defun tool-bfs-predecessors (узлы рёбра node-id &optional (глубина 3))
-  "BFS назад по рёбрам графа: кто ведёт к NODE-ID до заданной ГЛУБИНЫ.
-   Возвращает строку с найденными предшественниками."
-  (unless (gethash node-id узлы)
-    (return-from tool-bfs-predecessors
-      (format nil "ERROR: Node '~A' not found in graph" node-id)))
-  (let ((обратный (make-hash-table :test #'equal))
+(defun bfs-traverse (узлы рёбра node-id глубина направление)
+  "Общий BFS по графу. НАПРАВЛЕНИЕ — :назад или :вперёд.
+   Возвращает список строк найденных узлов."
+  (let ((смежность (make-hash-table :test #'equal))
         (посещены (make-hash-table :test #'equal))
         (результат '()))
-    ;; Строим обратный граф
     (dolist (р рёбра)
-      (push (ребро-откуда р) (gethash (ребро-куда р) обратный)))
+      (if (eq направление :назад)
+          (push (ребро-откуда р) (gethash (ребро-куда р) смежность))
+          (push (ребро-куда р) (gethash (ребро-откуда р) смежность))))
     (setf (gethash node-id посещены) t)
     (let ((очередь (list node-id)))
       (dotimes (_ глубина)
         (let ((следующий '()))
           (dolist (cur очередь)
-            (dolist (prev (gethash cur обратный))
-              (unless (gethash prev посещены)
-                (setf (gethash prev посещены) t)
-                (let ((у (gethash prev узлы)))
+            (dolist (сосед (gethash cur смежность))
+              (unless (gethash сосед посещены)
+                (setf (gethash сосед посещены) t)
+                (let ((у (gethash сосед узлы)))
                   (push (if у
-                            (format nil "~A[~A]" prev (узел-метка у))
-                            prev)
+                            (format nil "~A[~A]" сосед (узел-метка у))
+                            сосед)
                         результат))
-                (push prev следующий))))
+                (push сосед следующий))))
           (setf очередь следующий))))
+    (nreverse результат)))
+
+(defun tool-bfs-predecessors (узлы рёбра node-id &optional (глубина 3))
+  "BFS назад по рёбрам графа: кто ведёт к NODE-ID до заданной ГЛУБИНЫ."
+  (unless (gethash node-id узлы)
+    (return-from tool-bfs-predecessors
+      (format nil "ERROR: Node '~A' not found in graph" node-id)))
+  (let ((результат (bfs-traverse узлы рёбра node-id глубина :назад)))
     (if результат
         (format nil "Predecessors of ~A (depth ~D): ~{~A~^, ~}"
-                node-id глубина (nreverse результат))
+                node-id глубина результат)
         (format nil "No predecessors found for ~A within depth ~D"
                 node-id глубина))))
 
 (defun tool-bfs-successors (узлы рёбра node-id &optional (глубина 3))
-  "BFS вперёд по рёбрам графа: куда ведёт NODE-ID до заданной ГЛУБИНЫ.
-   Возвращает строку с найденными последователями."
+  "BFS вперёд по рёбрам графа: куда ведёт NODE-ID до заданной ГЛУБИНЫ."
   (unless (gethash node-id узлы)
     (return-from tool-bfs-successors
       (format nil "ERROR: Node '~A' not found in graph" node-id)))
-  (let ((смежность (make-hash-table :test #'equal))
-        (посещены (make-hash-table :test #'equal))
-        (результат '()))
-    ;; Строим прямой граф
-    (dolist (р рёбра)
-      (push (ребро-куда р) (gethash (ребро-откуда р) смежность)))
-    (setf (gethash node-id посещены) t)
-    (let ((очередь (list node-id)))
-      (dotimes (_ глубина)
-        (let ((следующий '()))
-          (dolist (cur очередь)
-            (dolist (next (gethash cur смежность))
-              (unless (gethash next посещены)
-                (setf (gethash next посещены) t)
-                (let ((у (gethash next узлы)))
-                  (push (if у
-                            (format nil "~A[~A]" next (узел-метка у))
-                            next)
-                        результат))
-                (push next следующий))))
-          (setf очередь следующий))))
+  (let ((результат (bfs-traverse узлы рёбра node-id глубина :вперёд)))
     (if результат
         (format nil "Successors of ~A (depth ~D): ~{~A~^, ~}"
-                node-id глубина (nreverse результат))
+                node-id глубина результат)
         (format nil "No successors found for ~A within depth ~D"
                 node-id глубина))))
 
@@ -414,12 +417,6 @@
     (vector-push-extend (nreverse finding) findings)
     (format nil "Finding recorded (#~D, ~A, ~A): ~A"
             (length findings) severity node description)))
-
-(defun tool-finish (findings summary)
-  "Маркер завершения анализа. Возвращает alist с :finish t и summary."
-  (list (cons :finish t)
-        (cons :summary summary)
-        (cons :findings-count (length findings))))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; LLM с tool_use
@@ -469,13 +466,6 @@
                         (cons :arguments args))))
               tool-calls))))
 
-(defun извлечь-контент (ответ)
-  "Извлечь текстовый content из JSON-ответа OpenRouter."
-  (let* ((choices (cdr (assoc :choices ответ)))
-         (первый (and choices (car choices)))
-         (message (cdr (assoc :message первый))))
-    (cdr (assoc :content message))))
-
 (defun assistant-msg-из-ответа (ответ)
   "Извлечь полное assistant message из ответа для добавления в историю."
   (let* ((choices (cdr (assoc :choices ответ)))
@@ -523,9 +513,7 @@
                               (cdr (assoc :code--ref аргументы))
                               (cdr (assoc :recommendation аргументы))))
         ((string= имя "finish")
-         (tool-finish findings (cdr (assoc :summary аргументы)))
-         ;; Возвращаем специальную строку-маркер для finish
-         (format nil "<<FINISH>>~A" (cdr (assoc :summary аргументы))))
+         (format nil "Analysis finished. ~A" (or (cdr (assoc :summary аргументы)) "")))
         (t (format nil "ERROR: Unknown tool '~A'" имя)))
     (error (e)
       (format nil "ERROR: Tool '~A' failed: ~A" имя e))))
@@ -542,64 +530,61 @@
 
 (defun tool-loop (сообщения узлы рёбра репо-путь индекс findings
                   &key (вызвать-llm-fn #'вызвать-llm-tools) (счётчик 0))
-  "Рекурсивный tool-loop: LLM → extract tool_calls → dispatch → append → repeat.
+  "Итеративный tool-loop: LLM → extract tool_calls → dispatch → append → repeat.
    Завершается при: finish tool, нет tool_calls, или лимит вызовов.
    ВЫЗВАТЬ-LLM-FN — функция для вызова LLM (для тестирования можно подменить).
    Возвращает findings вектор."
-  (when (>= счётчик *макс-tool-calls*)
-    (format t "[tool-loop] Лимит ~A tool calls достигнут~%" *макс-tool-calls*)
-    (return-from tool-loop findings))
+  (let ((текущие-сообщения сообщения)
+        (текущий-счётчик счётчик))
+    (loop
+      (when (>= текущий-счётчик *макс-tool-calls*)
+        (format t "[tool-loop] Лимит ~A tool calls достигнут~%" *макс-tool-calls*)
+        (return findings))
 
-  (let* ((ответ (funcall вызвать-llm-fn сообщения))
-         (tool-calls (извлечь-tool-calls ответ)))
+      (let* ((ответ (funcall вызвать-llm-fn текущие-сообщения))
+             (tool-calls (извлечь-tool-calls ответ)))
 
-    ;; Нет tool calls → агент закончил текстом
-    (unless tool-calls
-      (format t "[tool-loop] Нет tool calls, завершение~%")
-      (return-from tool-loop findings))
+        ;; Нет tool calls → агент закончил текстом
+        (unless tool-calls
+          (format t "[tool-loop] Нет tool calls, завершение~%")
+          (return findings))
 
-    ;; Добавить assistant message в историю
-    (let ((assistant-msg (assistant-msg-из-ответа ответ))
-          (новые-сообщения (copy-list сообщения))
-          (finish? nil))
+        ;; Добавить assistant message в историю
+        (let ((assistant-msg (assistant-msg-из-ответа ответ))
+              (finish? nil))
 
-      ;; Добавляем assistant message
-      (setf новые-сообщения
-            (append новые-сообщения (list assistant-msg)))
+          (setf текущие-сообщения
+                (nconc текущие-сообщения (list assistant-msg)))
 
-      ;; Выполнить каждый tool call и собрать results
-      (dolist (tc tool-calls)
-        (let* ((id (cdr (assoc :id tc)))
-               (имя (cdr (assoc :name tc)))
-               (args (cdr (assoc :arguments tc)))
-               (результат (выполнить-tool имя args узлы рёбра
-                                          репо-путь индекс findings)))
-          (format t "[tool-loop] ~A(~{~A=~A~^, ~}) → ~A~%"
-                  имя
-                  (loop for (k . v) in args
-                        collect (string-downcase (symbol-name k))
-                        collect (if (stringp v) v (format nil "~A" v)))
-                  (subseq результат 0 (min 80 (length результат))))
+          ;; Выполнить каждый tool call и собрать results
+          (dolist (tc tool-calls)
+            (let* ((id (cdr (assoc :id tc)))
+                   (имя (cdr (assoc :name tc)))
+                   (args (cdr (assoc :arguments tc)))
+                   (результат (выполнить-tool имя args узлы рёбра
+                                              репо-путь индекс findings)))
+              (format t "[tool-loop] ~A(~{~A=~A~^, ~}) → ~A~%"
+                      имя
+                      (loop for (k . v) in args
+                            collect (string-downcase (symbol-name k))
+                            collect (if (stringp v) v (format nil "~A" v)))
+                      (subseq результат 0 (min 80 (length результат))))
 
-          ;; Проверка finish
-          (when (and (>= (length результат) 10)
-                     (string= (subseq результат 0 10) "<<FINISH>>"))
-            (setf finish? t))
+              ;; Проверка finish по имени tool
+              (when (string= имя "finish")
+                (setf finish? t))
 
-          ;; Добавить tool result в историю
-          (setf новые-сообщения
-                (append новые-сообщения
-                        (list (сообщение-tool-result id результат))))))
+              ;; Добавить tool result в историю
+              (setf текущие-сообщения
+                    (nconc текущие-сообщения
+                           (list (сообщение-tool-result id результат))))))
 
-      ;; Если finish — выход
-      (when finish?
-        (format t "[tool-loop] Finish вызван, завершение~%")
-        (return-from tool-loop findings))
+          ;; Если finish — выход
+          (when finish?
+            (format t "[tool-loop] Finish вызван, завершение~%")
+            (return findings))
 
-      ;; Рекурсия
-      (tool-loop новые-сообщения узлы рёбра репо-путь индекс findings
-                 :вызвать-llm-fn вызвать-llm-fn
-                 :счётчик (+ счётчик (length tool-calls))))))
+          (incf текущий-счётчик (length tool-calls)))))))
 
 ;; ════════════════════════════════════════════════════════════════
 ;; Системный промпт агента
@@ -803,6 +788,22 @@
 ;; Тесты
 ;; ════════════════════════════════════════════════════════════════
 
+(defvar *тест-граф-полный* "flowchart TD
+A0[\"Создать заказ\"]
+A1[\"Оплатить\"]
+A2{\"Оплата OK?\"}
+ERR1[\"Ошибка оплаты\"]
+OK1[\"Заказ завершён\"]
+A0 --> A1
+A1 --> A2
+A2 -->|\"Да\"| OK1
+A2 -->|\"Нет\"| ERR1")
+
+(defvar *тест-граф-короткий* "flowchart TD
+A0[\"Создать заказ\"]
+ERR1[\"Ошибка оплаты\"]
+A0 --> ERR1")
+
 (defvar *тест-ошибок* 0)
 
 (defmacro проверить (описание &body тело)
@@ -844,16 +845,7 @@
 
 (defun тест-граф-парсер ()
   "Тест парсера mermaid-графа."
-  (let ((тест-граф "flowchart TD
-A0[\"Создать заказ\"]
-A1[\"Оплатить\"]
-A2{\"Оплата OK?\"}
-ERR1[\"Ошибка оплаты\"]
-OK1[\"Заказ завершён\"]
-A0 --> A1
-A1 --> A2
-A2 -->|\"Да\"| OK1
-A2 -->|\"Нет\"| ERR1"))
+  (let ((тест-граф *тест-граф-полный*))
     (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
       (проверить "парсер находит узлы"
         (assert (= (hash-table-count узлы) 5) ()
@@ -973,16 +965,7 @@ A2 -->|\"Нет\"| ERR1"))
 
 (defun тест-tool-bfs-predecessors ()
   "Тест tool-bfs-predecessors на тестовом графе."
-  (let ((тест-граф "flowchart TD
-A0[\"Создать заказ\"]
-A1[\"Оплатить\"]
-A2{\"Оплата OK?\"}
-ERR1[\"Ошибка оплаты\"]
-OK1[\"Заказ завершён\"]
-A0 --> A1
-A1 --> A2
-A2 -->|\"Да\"| OK1
-A2 -->|\"Нет\"| ERR1"))
+  (let ((тест-граф *тест-граф-полный*))
     (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
       ;; BFS назад от ERR1 — должен найти A2, A1, A0
       (проверить "bfs-predecessors от ERR1 глубина 3"
@@ -1013,16 +996,7 @@ A2 -->|\"Нет\"| ERR1"))
 
 (defun тест-tool-bfs-successors ()
   "Тест tool-bfs-successors на тестовом графе."
-  (let ((тест-граф "flowchart TD
-A0[\"Создать заказ\"]
-A1[\"Оплатить\"]
-A2{\"Оплата OK?\"}
-ERR1[\"Ошибка оплаты\"]
-OK1[\"Заказ завершён\"]
-A0 --> A1
-A1 --> A2
-A2 -->|\"Да\"| OK1
-A2 -->|\"Нет\"| ERR1"))
+  (let ((тест-граф *тест-граф-полный*))
     (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
       ;; BFS вперёд от A0 — должен найти A1, A2, ERR1, OK1
       (проверить "bfs-successors от A0 глубина 3"
@@ -1051,10 +1025,7 @@ A2 -->|\"Нет\"| ERR1"))
 
 (defun тест-tool-get-node-label ()
   "Тест tool-get-node-label."
-  (let ((тест-граф "flowchart TD
-A0[\"Создать заказ\"]
-ERR1[\"Ошибка оплаты\"]
-A0 --> ERR1"))
+  (let ((тест-граф *тест-граф-короткий*))
     (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
       (declare (ignore рёбра))
       ;; Существующий узел
@@ -1096,16 +1067,19 @@ A0 --> ERR1"))
               "Ожидалось 2 findings, получено ~A" (length findings)))))
 
 (defun тест-tool-finish ()
-  "Тест tool-finish."
-  (let ((findings (make-array 2 :adjustable t :fill-pointer 2)))
-    (проверить "finish — возвращает alist с :finish t"
-      (let ((рез (tool-finish findings "Analysis complete")))
-        (assert (cdr (assoc :finish рез)) ()
-                ":finish не t: ~A" рез)
-        (assert (string= (cdr (assoc :summary рез)) "Analysis complete") ()
-                "summary не совпадает: ~A" рез)
-        (assert (= (cdr (assoc :findings-count рез)) 2) ()
-                "findings-count не 2: ~A" рез)))))
+  "Тест finish через dispatcher."
+  (let ((тест-граф *тест-граф-короткий*))
+    (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
+      (let ((findings (make-array 0 :adjustable t :fill-pointer 0))
+            (индекс '()))
+        (проверить "finish — через dispatcher возвращает строку"
+          (let ((рез (выполнить-tool "finish"
+                                     '((:summary . "Analysis complete"))
+                                     узлы рёбра "/tmp" индекс findings)))
+            (assert (search "Analysis finished" рез) ()
+                    "finish не вернул маркер: ~A" рез)
+            (assert (search "Analysis complete" рез) ()
+                    "finish не содержит summary: ~A" рез)))))))
 
 (defun mock-tool-call (id имя arguments-json)
   "Создать mock tool_call alist."
@@ -1168,10 +1142,7 @@ A0 --> ERR1"))
 
 (defun тест-выполнить-tool ()
   "Тест dispatcher выполнить-tool."
-  (let ((тест-граф "flowchart TD
-A0[\"Создать заказ\"]
-ERR1[\"Ошибка оплаты\"]
-A0 --> ERR1"))
+  (let ((тест-граф *тест-граф-короткий*))
     (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
       (let* ((мой-абс (merge-pathnames *мой-путь* (uiop:getcwd)))
              (репо-путь (directory-namestring мой-абс))
@@ -1229,7 +1200,7 @@ A0 --> ERR1"))
           (let ((рез (выполнить-tool "finish"
                                      '((:summary . "Done"))
                                      узлы рёбра репо-путь индекс findings)))
-            (assert (search "<<FINISH>>" рез) ()
+            (assert (search "Analysis finished" рез) ()
                     "finish не вернул маркер: ~A" рез)))
 
         ;; Unknown tool
@@ -1242,10 +1213,7 @@ A0 --> ERR1"))
 
 (defun тест-tool-loop ()
   "Тест tool-loop с mock LLM."
-  (let ((тест-граф "flowchart TD
-A0[\"Создать заказ\"]
-ERR1[\"Ошибка оплаты\"]
-A0 --> ERR1"))
+  (let ((тест-граф *тест-граф-короткий*))
     (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
       (let* ((мой-абс (merge-pathnames *мой-путь* (uiop:getcwd)))
              (репо-путь (directory-namestring мой-абс))
@@ -1317,8 +1285,8 @@ A0 --> ERR1"))
                                     (cons :content "Test")))
                          узлы рёбра репо-путь индекс findings3
                          :вызвать-llm-fn #'mock-llm-infinite)
-              (assert (<= вызовов 3) ()
-                      "Слишком много вызовов: ~A (лимит 2)" вызовов))))))))
+              (assert (= вызовов 2) ()
+                      "Ожидалось 2 вызова LLM при лимите 2, было ~A" вызовов))))))))
 
 (defun тест-отформатировать-отчёт ()
   "Тест форматирования отчёта из findings."
