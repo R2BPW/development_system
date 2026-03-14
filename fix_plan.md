@@ -32,7 +32,7 @@ Hunchentoot (порт 7070) ↕ Мастер (SBCL)
 
 - [x] **[HTTP-THREAD]** Обновить `мастер/cl/main.lisp`. В функцию `start` добавить в начало: запуск HTTP-сервера через `(bt:make-thread #'start-http-server :name "http-server")`. Добавить импорт bordeaux-threads если нужно.
 
-- [ ] **[WEB-INIT]** Создать директорию `web/` в корне проекта. Создать `web/package.json`:
+- [x] **[WEB-INIT]** Создать директорию `web/` в корне проекта. Создать `web/package.json`:
 ```json
 {
   "name": "мастер-pwa",

@@ -1,3 +1,2 @@
 [ralph] project=/root/.openclaw/workspace/development_system/ executor=anthropic/claude-sonnet-4-5
-[ralph] ════ Loop 1 ════ task=[HTTP-THREAD]
-[ralph] ✓ [HTTP-THREAD] done
+[ralph] ════ Loop 1 ════ task=[WEB-INIT]
