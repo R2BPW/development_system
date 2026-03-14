@@ -321,12 +321,12 @@ Agent: tool_call: finish("Проанализировал ERR1. Найдена 1 
 
 ### Task 3: Tool implementations — граф-навигация + управление
 
-- [ ] 3.1 `tool-bfs-predecessors` — BFS назад по рёбрам графа до заданной глубины
-- [ ] 3.2 `tool-bfs-successors` — BFS вперёд по рёбрам графа до заданной глубины
-- [ ] 3.3 `tool-get-node-label` — получить метку узла по id
-- [ ] 3.4 `tool-report-finding` — добавить finding в список (мутация state)
-- [ ] 3.5 `tool-finish` — маркер завершения + summary
-- [ ] 3.6 Тесты graph + management tools
+- [x] 3.1 `tool-bfs-predecessors` — BFS назад по рёбрам графа до заданной глубины
+- [x] 3.2 `tool-bfs-successors` — BFS вперёд по рёбрам графа до заданной глубины
+- [x] 3.3 `tool-get-node-label` — получить метку узла по id
+- [x] 3.4 `tool-report-finding` — добавить finding в список (мутация state)
+- [x] 3.5 `tool-finish` — маркер завершения + summary
+- [x] 3.6 Тесты graph + management tools
 
 ---
 

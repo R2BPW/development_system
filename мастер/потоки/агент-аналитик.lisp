@@ -319,6 +319,109 @@
         (format nil "No definition found for '~A'" имя))))
 
 ;; ════════════════════════════════════════════════════════════════
+;; Tool implementations — граф-навигация
+;; ════════════════════════════════════════════════════════════════
+
+(defun tool-bfs-predecessors (узлы рёбра node-id &optional (глубина 3))
+  "BFS назад по рёбрам графа: кто ведёт к NODE-ID до заданной ГЛУБИНЫ.
+   Возвращает строку с найденными предшественниками."
+  (unless (gethash node-id узлы)
+    (return-from tool-bfs-predecessors
+      (format nil "ERROR: Node '~A' not found in graph" node-id)))
+  (let ((обратный (make-hash-table :test #'equal))
+        (посещены (make-hash-table :test #'equal))
+        (результат '()))
+    ;; Строим обратный граф
+    (dolist (р рёбра)
+      (push (ребро-откуда р) (gethash (ребро-куда р) обратный)))
+    (setf (gethash node-id посещены) t)
+    (let ((очередь (list node-id)))
+      (dotimes (_ глубина)
+        (let ((следующий '()))
+          (dolist (cur очередь)
+            (dolist (prev (gethash cur обратный))
+              (unless (gethash prev посещены)
+                (setf (gethash prev посещены) t)
+                (let ((у (gethash prev узлы)))
+                  (push (if у
+                            (format nil "~A[~A]" prev (узел-метка у))
+                            prev)
+                        результат))
+                (push prev следующий))))
+          (setf очередь следующий))))
+    (if результат
+        (format nil "Predecessors of ~A (depth ~D): ~{~A~^, ~}"
+                node-id глубина (nreverse результат))
+        (format nil "No predecessors found for ~A within depth ~D"
+                node-id глубина))))
+
+(defun tool-bfs-successors (узлы рёбра node-id &optional (глубина 3))
+  "BFS вперёд по рёбрам графа: куда ведёт NODE-ID до заданной ГЛУБИНЫ.
+   Возвращает строку с найденными последователями."
+  (unless (gethash node-id узлы)
+    (return-from tool-bfs-successors
+      (format nil "ERROR: Node '~A' not found in graph" node-id)))
+  (let ((смежность (make-hash-table :test #'equal))
+        (посещены (make-hash-table :test #'equal))
+        (результат '()))
+    ;; Строим прямой граф
+    (dolist (р рёбра)
+      (push (ребро-куда р) (gethash (ребро-откуда р) смежность)))
+    (setf (gethash node-id посещены) t)
+    (let ((очередь (list node-id)))
+      (dotimes (_ глубина)
+        (let ((следующий '()))
+          (dolist (cur очередь)
+            (dolist (next (gethash cur смежность))
+              (unless (gethash next посещены)
+                (setf (gethash next посещены) t)
+                (let ((у (gethash next узлы)))
+                  (push (if у
+                            (format nil "~A[~A]" next (узел-метка у))
+                            next)
+                        результат))
+                (push next следующий))))
+          (setf очередь следующий))))
+    (if результат
+        (format nil "Successors of ~A (depth ~D): ~{~A~^, ~}"
+                node-id глубина (nreverse результат))
+        (format nil "No successors found for ~A within depth ~D"
+                node-id глубина))))
+
+(defun tool-get-node-label (узлы node-id)
+  "Получить метку узла по ID. Возвращает строку."
+  (let ((у (gethash node-id узлы)))
+    (if у
+        (format nil "~A: ~A" node-id (узел-метка у))
+        (format nil "ERROR: Node '~A' not found in graph" node-id))))
+
+;; ════════════════════════════════════════════════════════════════
+;; Tool implementations — управление
+;; ════════════════════════════════════════════════════════════════
+
+(defun tool-report-finding (findings node category description severity
+                            &optional code-ref recommendation)
+  "Добавить finding в список. Мутирует FINDINGS (список с fill-pointer).
+   Возвращает строку-подтверждение."
+  (let ((finding (list (cons :node node)
+                       (cons :category category)
+                       (cons :description description)
+                       (cons :severity severity))))
+    (when code-ref
+      (push (cons :code-ref code-ref) finding))
+    (when recommendation
+      (push (cons :recommendation recommendation) finding))
+    (vector-push-extend (nreverse finding) findings)
+    (format nil "Finding recorded (#~D, ~A, ~A): ~A"
+            (length findings) severity node description)))
+
+(defun tool-finish (findings summary)
+  "Маркер завершения анализа. Возвращает alist с :finish t и summary."
+  (list (cons :finish t)
+        (cons :summary summary)
+        (cons :findings-count (length findings))))
+
+;; ════════════════════════════════════════════════════════════════
 ;; Тесты
 ;; ════════════════════════════════════════════════════════════════
 
@@ -490,6 +593,142 @@ A2 -->|\"Нет\"| ERR1"))
         (assert (search "No definition" рез) ()
                 "Ожидалось 'No definition': ~A" рез)))))
 
+(defun тест-tool-bfs-predecessors ()
+  "Тест tool-bfs-predecessors на тестовом графе."
+  (let ((тест-граф "flowchart TD
+A0[\"Создать заказ\"]
+A1[\"Оплатить\"]
+A2{\"Оплата OK?\"}
+ERR1[\"Ошибка оплаты\"]
+OK1[\"Заказ завершён\"]
+A0 --> A1
+A1 --> A2
+A2 -->|\"Да\"| OK1
+A2 -->|\"Нет\"| ERR1"))
+    (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
+      ;; BFS назад от ERR1 — должен найти A2, A1, A0
+      (проверить "bfs-predecessors от ERR1 глубина 3"
+        (let ((рез (tool-bfs-predecessors узлы рёбра "ERR1" 3)))
+          (assert (search "A2" рез) ()
+                  "Не найден A2 в предшественниках ERR1: ~A" рез)
+          (assert (search "A1" рез) ()
+                  "Не найден A1 в предшественниках ERR1: ~A" рез)
+          (assert (search "A0" рез) ()
+                  "Не найден A0 в предшественниках ERR1: ~A" рез)))
+      ;; BFS назад от ERR1 глубина 1 — только A2
+      (проверить "bfs-predecessors от ERR1 глубина 1"
+        (let ((рез (tool-bfs-predecessors узлы рёбра "ERR1" 1)))
+          (assert (search "A2" рез) ()
+                  "Не найден A2: ~A" рез)
+          (assert (not (search "A0" рез)) ()
+                  "A0 не должен быть на глубине 1: ~A" рез)))
+      ;; BFS назад от A0 — нет предшественников
+      (проверить "bfs-predecessors от A0 — нет предшественников"
+        (let ((рез (tool-bfs-predecessors узлы рёбра "A0")))
+          (assert (search "No predecessors" рез) ()
+                  "Ожидалось 'No predecessors': ~A" рез)))
+      ;; Несуществующий узел
+      (проверить "bfs-predecessors — несуществующий узел"
+        (let ((рез (tool-bfs-predecessors узлы рёбра "NOSUCH")))
+          (assert (search "ERROR" рез) ()
+                  "Ожидалась ошибка: ~A" рез))))))
+
+(defun тест-tool-bfs-successors ()
+  "Тест tool-bfs-successors на тестовом графе."
+  (let ((тест-граф "flowchart TD
+A0[\"Создать заказ\"]
+A1[\"Оплатить\"]
+A2{\"Оплата OK?\"}
+ERR1[\"Ошибка оплаты\"]
+OK1[\"Заказ завершён\"]
+A0 --> A1
+A1 --> A2
+A2 -->|\"Да\"| OK1
+A2 -->|\"Нет\"| ERR1"))
+    (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
+      ;; BFS вперёд от A0 — должен найти A1, A2, ERR1, OK1
+      (проверить "bfs-successors от A0 глубина 3"
+        (let ((рез (tool-bfs-successors узлы рёбра "A0" 3)))
+          (assert (search "A1" рез) ()
+                  "Не найден A1: ~A" рез)
+          (assert (search "A2" рез) ()
+                  "Не найден A2: ~A" рез)))
+      ;; BFS вперёд от A0 глубина 1 — только A1
+      (проверить "bfs-successors от A0 глубина 1"
+        (let ((рез (tool-bfs-successors узлы рёбра "A0" 1)))
+          (assert (search "A1" рез) ()
+                  "Не найден A1: ~A" рез)
+          (assert (not (search "ERR1" рез)) ()
+                  "ERR1 не должен быть на глубине 1: ~A" рез)))
+      ;; BFS вперёд от ERR1 — нет последователей
+      (проверить "bfs-successors от ERR1 — нет последователей"
+        (let ((рез (tool-bfs-successors узлы рёбра "ERR1")))
+          (assert (search "No successors" рез) ()
+                  "Ожидалось 'No successors': ~A" рез)))
+      ;; Несуществующий узел
+      (проверить "bfs-successors — несуществующий узел"
+        (let ((рез (tool-bfs-successors узлы рёбра "NOSUCH")))
+          (assert (search "ERROR" рез) ()
+                  "Ожидалась ошибка: ~A" рез))))))
+
+(defun тест-tool-get-node-label ()
+  "Тест tool-get-node-label."
+  (let ((тест-граф "flowchart TD
+A0[\"Создать заказ\"]
+ERR1[\"Ошибка оплаты\"]
+A0 --> ERR1"))
+    (multiple-value-bind (узлы рёбра) (разобрать-граф тест-граф)
+      (declare (ignore рёбра))
+      ;; Существующий узел
+      (проверить "get-node-label — существующий узел"
+        (let ((рез (tool-get-node-label узлы "A0")))
+          (assert (search "Создать заказ" рез) ()
+                  "Не найдена метка: ~A" рез)))
+      ;; Несуществующий узел
+      (проверить "get-node-label — несуществующий узел"
+        (let ((рез (tool-get-node-label узлы "NOSUCH")))
+          (assert (search "ERROR" рез) ()
+                  "Ожидалась ошибка: ~A" рез))))))
+
+(defun тест-tool-report-finding ()
+  "Тест tool-report-finding."
+  (let ((findings (make-array 0 :adjustable t :fill-pointer 0)))
+    ;; Добавить finding
+    (проверить "report-finding — добавление"
+      (let ((рез (tool-report-finding findings "ERR1" "compensation_gap"
+                                      "Order not rolled back" "critical"
+                                      "orders/services.py:48"
+                                      "Add order.delete()")))
+        (assert (search "Finding recorded" рез) ()
+                "Ожидалось подтверждение: ~A" рез)
+        (assert (= (length findings) 1) ()
+                "Ожидался 1 finding, получено ~A" (length findings))))
+    ;; Проверить содержимое finding
+    (проверить "report-finding — содержимое"
+      (let ((f (aref findings 0)))
+        (assert (string= (cdr (assoc :node f)) "ERR1") ()
+                "node не ERR1")
+        (assert (string= (cdr (assoc :severity f)) "critical") ()
+                "severity не critical")))
+    ;; Добавить второй finding без optional полей
+    (проверить "report-finding — без optional полей"
+      (tool-report-finding findings "A2" "edge_case"
+                           "Branch not covered" "warning")
+      (assert (= (length findings) 2) ()
+              "Ожидалось 2 findings, получено ~A" (length findings)))))
+
+(defun тест-tool-finish ()
+  "Тест tool-finish."
+  (let ((findings (make-array 2 :adjustable t :fill-pointer 2)))
+    (проверить "finish — возвращает alist с :finish t"
+      (let ((рез (tool-finish findings "Analysis complete")))
+        (assert (cdr (assoc :finish рез)) ()
+                ":finish не t: ~A" рез)
+        (assert (string= (cdr (assoc :summary рез)) "Analysis complete") ()
+                "summary не совпадает: ~A" рез)
+        (assert (= (cdr (assoc :findings-count рез)) 2) ()
+                "findings-count не 2: ~A" рез)))))
+
 (defun тест-всё ()
   "Запуск всех тестов."
   (setf *тест-ошибок* 0)
@@ -500,6 +739,11 @@ A2 -->|\"Нет\"| ERR1"))
   (тест-tool-search-in-file)
   (тест-tool-read-lines)
   (тест-tool-find-function)
+  (тест-tool-bfs-predecessors)
+  (тест-tool-bfs-successors)
+  (тест-tool-get-node-label)
+  (тест-tool-report-finding)
+  (тест-tool-finish)
   (format t "~%Ошибок: ~A~%" *тест-ошибок*)
   (when (plusp *тест-ошибок*)
     (error "~A тестов провалено" *тест-ошибок*))
